@@ -1,0 +1,2828 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="description" content="Рыба ест рыбу — браузерный аркадный симулятор: растите, ешьте, плодите союзников и зачистите карту." />
+  <meta name="theme-color" content="#0a84ff" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="manifest.json" />
+  <title>Рыба ест рыбу</title>
+  <!-- Yandex Games SDK (загружается с хоста платформы при публикации в Я.Игры) -->
+  <script src="/sdk.js"></script>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --surface: #ffffff;
+      --surface-soft: #fafbfd;
+      --border: #e6e8ee;
+      --border-strong: #d8dce5;
+      --text: #1c1d22;
+      --text-muted: #6b7280;
+      --accent: #0a84ff;
+      --accent-soft: #e8f1ff;
+      --warn: #ff9f0a;
+      --warn-soft: #fff4e1;
+      --danger: #ff3b30;
+      --success: #34c759;
+      --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+      --shadow-md: 0 6px 24px rgba(15, 23, 42, 0.08);
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif;
+      font-size: 14px;
+      height: 100vh;
+      height: 100dvh; /* учёт мобильного UI (адресная строка и т.п.) */
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+      overscroll-behavior: none;
+    }
+
+    /* ===== Header ===== */
+    .app-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      height: 44px;
+      padding: 0 14px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+
+    .header-stats {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex: 1;
+      margin-left: 8px;
+    }
+
+    .size-block {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 220px;
+    }
+
+    .size-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      letter-spacing: 0.2px;
+      text-transform: uppercase;
+    }
+
+
+    .size-value {
+      font-variant-numeric: tabular-nums;
+      font-size: 13px;
+      color: var(--text);
+      min-width: 70px;
+      text-align: right;
+    }
+
+    .badges {
+      display: flex;
+      gap: 6px;
+      margin-left: 4px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      background: var(--surface-soft);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      transition: all 0.15s ease;
+    }
+
+    .badge .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .badge.is-active {
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-color: transparent;
+    }
+
+    .badge.is-warn {
+      background: var(--warn-soft);
+      color: var(--warn);
+      border-color: transparent;
+    }
+
+    .badge.is-boost {
+      background: #e0f0ff;
+      color: #0a78d8;
+      border-color: transparent;
+    }
+
+    .badge[hidden] { display: none; }
+
+    .icon-btn {
+      width: 32px;
+      height: 32px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .icon-btn:hover {
+      background: var(--surface-soft);
+      border-color: var(--border);
+      color: var(--text);
+    }
+
+    .icon-btn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .icon-btn svg { width: 18px; height: 18px; }
+
+    /* ===== Main game area ===== */
+    .game-area {
+      flex: 1;
+      display: flex;
+      gap: 10px;
+      padding: 4px 10px 8px;
+      min-height: 0;
+    }
+
+    .canvas-wrap {
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+      position: relative;
+      background:
+        radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 55%),
+        linear-gradient(180deg, #d6ecff 0%, #b1d6ff 45%, #6fa7e8 100%);
+      border: 1px solid #b6d3ee;
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm), inset 0 0 80px rgba(10,80,160,0.18);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.6s ease, box-shadow 0.4s ease;
+    }
+    .canvas-wrap.is-dead {
+      box-shadow: var(--shadow-sm), inset 0 0 100px rgba(216,35,15,0.45);
+    }
+
+    /* Канвас динамически подгоняется под контейнер из JS */
+    #gameCanvas {
+      display: block;
+      background: transparent;
+      touch-action: none;
+      max-width: 100%;
+      max-height: 100%;
+    }
+
+    /* Лог скрыт по умолчанию, показывается только в режиме отладки. */
+    .log-panel {
+      display: none;
+      width: 240px;
+      flex-shrink: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      flex-direction: column;
+      overflow: hidden;
+      order: -1;
+    }
+    body.is-debug-on .log-panel { display: flex; }
+    body.is-layout-swapped .log-panel { order: 1; }
+    body.is-layout-swapped .joystick { right: auto; left: 22px; }
+    @media (max-width: 700px) {
+      .log-panel { width: 100%; height: 130px; order: 1; }
+      body.is-layout-swapped .log-panel { order: -1; }
+    }
+
+    .log-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .log-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: -0.1px;
+    }
+
+    .log-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 14px;
+      font-size: 12.5px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .log-body div { word-wrap: break-word; }
+    .log-body .log-taunt {
+      color: #d8230f;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      text-shadow: 0 0 1px rgba(216,35,15,0.25);
+    }
+
+    /* ===== Settings panel (right slide-in) ===== */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.18);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      z-index: 40;
+    }
+    .overlay.is-visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* ===== Toolbar (in header) ===== */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .toolbar .divider {
+      width: 1px;
+      height: 22px;
+      background: var(--border);
+      margin: 0 4px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: var(--surface-soft);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    .pill:hover { background: var(--surface); border-color: var(--border-strong); color: var(--text); }
+    .pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .pill.is-active {
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-color: transparent;
+    }
+    .pill.is-active.warn {
+      background: var(--warn-soft);
+      color: var(--warn);
+    }
+    .pill .pill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      opacity: 0.6;
+    }
+    .pill.is-active .pill-dot { opacity: 1; }
+
+    .kbd {
+      display: inline-block;
+      padding: 0 5px;
+      font-size: 10.5px;
+      font-family: 'SF Mono', Menlo, monospace;
+      background: rgba(0,0,0,0.04);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-muted);
+      vertical-align: middle;
+      line-height: 1.4;
+    }
+    .pill.is-active .kbd {
+      background: rgba(255,255,255,0.5);
+      border-color: transparent;
+      color: inherit;
+    }
+
+    /* ===== Popovers ===== */
+    /* По умолчанию поповер справа; rulesPopover переопределяется на лево. */
+    .popover {
+      position: absolute;
+      top: 48px;
+      right: 12px;
+      width: 320px;
+      max-height: calc(100dvh - 64px);
+      overflow-y: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-md);
+      padding: 14px 16px 16px;
+      z-index: 60;
+      opacity: 0;
+      transform: translateY(-6px);
+      pointer-events: none;
+      transition: opacity 0.15s ease, transform 0.15s ease;
+    }
+    #rulesPopover { right: auto; left: 12px; }
+    .popover.is-open {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+    .popover h3 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: -0.1px;
+      color: var(--text);
+    }
+
+    /* Rules content */
+    .rules-text {
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text);
+    }
+    .rules-text p { margin: 0 0 10px; color: var(--text-muted); }
+    .rules-text strong { font-weight: 600; color: var(--text); }
+    .rules-text ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .rules-text li {
+      padding: 7px 0;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+    .rules-text li::before {
+      content: '';
+      width: 4px;
+      height: 4px;
+      background: var(--accent);
+      border-radius: 50%;
+      margin-top: 8px;
+      flex-shrink: 0;
+    }
+
+    /* Legend */
+    .legend-list {
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+    .legend-list li {
+      padding: 0;
+      font-size: 13px;
+      color: var(--text);
+      border-top: 1px solid var(--border);
+    }
+    .legend-list li:first-child { border-top: none; }
+    .legend-list details {
+      display: block;
+    }
+    .legend-list summary {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      cursor: pointer;
+      list-style: none;
+      user-select: none;
+    }
+    .legend-list summary::-webkit-details-marker { display: none; }
+    .legend-list summary::after {
+      content: '';
+      width: 16px;
+      height: 16px;
+      margin-left: auto;
+      border-radius: 50%;
+      background: var(--surface-soft);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 700;
+      font-style: italic;
+      font-family: 'Times New Roman', serif;
+      line-height: 14px;
+      text-align: center;
+      flex-shrink: 0;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='none' stroke='%236b7280' stroke-width='1.2'/><circle cx='8' cy='4.5' r='0.9' fill='%236b7280'/><path d='M8 7 L8 12' stroke='%236b7280' stroke-width='1.4' stroke-linecap='round'/></svg>");
+      background-repeat: no-repeat;
+      background-size: 14px 14px;
+      background-position: center;
+    }
+    .legend-list details[open] summary::after {
+      background-color: var(--accent-soft);
+      border-color: transparent;
+    }
+    .legend-list .legend-desc {
+      padding: 0 0 10px 26px;
+      margin: 0 0 4px;
+      font-size: 12.5px;
+      color: var(--text-muted);
+      line-height: 1.45;
+    }
+    .legend-swatch {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      border: 2px solid transparent;
+    }
+    /* Безопасная рыба должна оставаться белой даже в системном тёмном режиме —
+       без явного цвета браузерные dark-style фильтры могут инвертировать её в чёрную. */
+    @media (prefers-color-scheme: dark) {
+      .legend-list .legend-swatch {
+        box-shadow: 0 0 0 1px var(--border) inset;
+      }
+    }
+    .legend-swatch.is-bolt {
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+    }
+    .legend-swatch.is-bolt svg {
+      width: 18px;
+      height: 18px;
+      display: block;
+    }
+
+
+    /* Кнопка-оверлей в центре канваса (старт игры / рестарт). */
+    .overlay-btn {
+      position: absolute;
+      left: 50%;
+      top: 62%;
+      transform: translateX(-50%);
+      padding: 14px 36px;
+      background: #d8230f;
+      color: #fff;
+      border: 2px solid #b01b08;
+      border-radius: 14px;
+      font: 700 22px/1 -apple-system, "Helvetica Neue", sans-serif;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(216,35,15,0.35), inset 0 1px 0 rgba(255,255,255,0.25);
+      z-index: 40;
+      user-select: none;
+      -webkit-user-select: none;
+      transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+    }
+    .overlay-btn:hover { background: #ff3b30; box-shadow: 0 10px 28px rgba(216,35,15,0.45); }
+    .overlay-btn:active { transform: translateX(-50%) scale(0.96); }
+    .overlay-btn[hidden] { display: none; }
+    .retry-btn { top: 56%; }
+
+    /* Виртуальный джойстик: 4 кнопки в форме плюса, поверх канваса */
+    .joystick {
+      position: absolute;
+      right: 22px;
+      bottom: 22px;
+      display: grid;
+      grid-template-columns: 40px 40px 40px;
+      grid-template-rows: 40px 40px 40px;
+      gap: 4px;
+      z-index: 30;
+      user-select: none;
+      -webkit-user-select: none;
+      pointer-events: auto;
+    }
+    .joystick button {
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--text-muted);
+      padding: 0;
+      touch-action: none;
+      box-shadow: var(--shadow-sm);
+      transition: background 0.12s ease, color 0.12s ease, transform 0.06s ease;
+    }
+    .joystick button:hover { background: rgba(255,255,255,0.95); color: var(--text); }
+    .joystick button:active,
+    .joystick button.is-pressed {
+      background: var(--accent);
+      color: #fff;
+      border-color: transparent;
+      transform: scale(0.95);
+    }
+    .joystick button svg { width: 18px; height: 18px; }
+    .joystick .j-up    { grid-column: 2; grid-row: 1; }
+    .joystick .j-left  { grid-column: 1; grid-row: 2; }
+    .joystick .j-right { grid-column: 3; grid-row: 2; }
+    .joystick .j-down  { grid-column: 2; grid-row: 3; }
+    /* Custom scrollbar (subtle) */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #b8bdc7; }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .size-block { min-width: 160px; }
+    }
+    @media (max-width: 700px) {
+      .game-area { padding: 10px; gap: 10px; }
+      .header-stats .size-label { display: none; }
+      .log-panel { width: calc(100vw - 24px); right: 12px; left: 12px; max-width: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-stats">
+      <div class="size-block">
+        <span class="size-label">Размер</span>
+        <span class="size-value" id="sizeValue">5.00 / 100</span>
+      </div>
+      <div class="badges">
+        <span class="badge is-warn" id="shieldBadge" hidden><span class="dot"></span>Щит</span>
+        <span class="badge is-boost" id="boosterBadge" hidden><span class="dot"></span>Бустер</span>
+      </div>
+    </div>
+    <div class="toolbar">
+      <button class="pill" id="autopilotPill" title="Включить/выключить автопилот">
+        <span class="pill-dot"></span>Автопилот <span class="kbd">Q</span>
+      </button>
+      <button class="pill" id="debugPill" title="Показать стрелки целей и угроз — видно, как мыслит ИИ">
+        <span class="pill-dot"></span>Логика ИИ <span class="kbd">F</span>
+      </button>
+      <span class="divider"></span>
+      <button class="pill" id="howToPlayBtn" title="Как играть">
+        <span class="pill-dot"></span>Как играть?
+      </button>
+      <button class="icon-btn" id="restartBtn" title="Начать заново" aria-label="Начать заново">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+      </button>
+      <button class="icon-btn" id="swapSidesBtn" title="Поменять стороны" aria-label="Поменять стороны">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="game-area">
+    <div class="canvas-wrap" id="gameBackground">
+      <canvas id="gameCanvas"></canvas>
+      <button class="overlay-btn intro-btn" id="introStartBtn" hidden>В БОЙ!</button>
+      <button class="overlay-btn retry-btn" id="retryBtn" hidden>Попробовать снова</button>
+      <div class="joystick" id="joystick" aria-label="Управление">
+        <button class="j-up" data-key="ArrowUp" aria-label="Вверх">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 14 12 8 18 14"/></svg>
+        </button>
+        <button class="j-left" data-key="ArrowLeft" aria-label="Влево">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14 6 8 12 14 18"/></svg>
+        </button>
+        <button class="j-right" data-key="ArrowRight" aria-label="Вправо">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="10 6 16 12 10 18"/></svg>
+        </button>
+        <button class="j-down" data-key="ArrowDown" aria-label="Вниз">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 10 12 16 18 10"/></svg>
+        </button>
+      </div>
+    </div>
+    <aside class="log-panel" id="logPanel">
+      <div class="log-header">
+        <span class="log-title">Лог</span>
+      </div>
+      <div class="log-body" id="logContent"></div>
+    </aside>
+  </main>
+
+  <div class="popover" id="rulesPopover" role="dialog" aria-label="">
+    <h3> </h3>
+    <div class="rules-text">
+      <p><strong>Цель:</strong> вырасти до размера 100.</p>
+      <p>Растите, ешьте мелких рыб, плодите союзников. Когда враги закончатся — победа.</p>
+      <ul id="rulesList"></ul>
+    </div>
+  </div>
+
+  <div class="popover" id="legendPopover" role="dialog" aria-label="Легенда">
+    <h3>Легенда</h3>
+    <ul class="legend-list" id="legendList"></ul>
+  </div>
+
+  <script>
+    // ===== Локализация (ru / en / zh) =====
+    const I18N = {
+      ru: {
+        title: 'Рыба ест рыбу',
+        size: 'Размер', shield: 'Щит', readyBreed: 'Готов размножаться', booster: 'Бустер',
+        autopilot: 'Автопилот', debug: 'Отладка',
+        rules: 'Правила', legend: 'Легенда', log: 'Лог', howToPlay: 'Как играть?', swap: 'Поменять стороны',
+        rulesAria: 'Правила', legendAria: 'Легенда',
+        autopilotTitle: 'Включить/выключить автопилот',
+        debugTitle: 'Показать стрелки целей и угроз — видно, как мыслит ИИ',
+        rulesBtnTitle: 'Правила', legendBtnTitle: 'Легенда',
+        restartBtnTitle: 'Начать заново', logToggleTitle: 'Свернуть лог',
+        dead: 'Мёртв', gameOver: 'Игра окончена',
+        restartIn: 'Перезапуск через 3 секунды…',
+        victory: 'Победа! Союзники зачистили карту',
+        introYouAre: 'это ты',
+        btnFight: 'В БОЙ!',
+        btnRetry: 'Попробовать снова',
+        restartHint: 'Нажмите ↻ в шапке, чтобы начать заново',
+        rulesGoal: 'Цель: вырасти до размера 100.',
+        rulesIntro: 'Растите, ешьте мелких рыб, плодите союзников. Дорастите до размера 100 — победа.',
+        rules1: 'Стрелки/WASD или клик по полю — движение (при выключенном автопилоте).',
+        rules2: 'Q — переключить автопилот.',
+        rules3: 'F — показать логику ИИ (стрелки целей и угроз).',
+        rules4: 'Подберите жёлтый щит — 5 секунд неуязвимости.',
+        rules5: 'Голубая молния — бустер +20% к скорости на 10 секунд.',
+        rules6: 'После смерти игрока союзники продолжают играть, рыбы спавнятся бесконечно.',
+        rulesWin: 'Достигни размера 100 — финальная победа.',
+        rulesAlpha: 'Союзники с размером ≥6 при встрече с другой альфой размножаются раз в 5 сек: оба теряют по 2 размера, появляется новый союзник. Игрок тоже может размножаться при встрече с союзником.',
+        rulesGrowth: 'Рост замедляется по мере увеличения: чем больше вы, тем меньше прирост от мелкой добычи. Формула: прирост ≈ размер_добычи × 0.1 × (1 − ваш_размер ⁄ 100).',
+        leg_player: 'Игрок', leg_ally: 'Союзник', leg_prey: 'Добыча',
+        leg_threat: 'Опасность', leg_safe: 'Безопасная рыба',
+        leg_sick: 'Больная рыба', leg_shielded: 'Под щитом', leg_shield: 'Щит (5 сек)',
+        leg_pill: 'Таблетка',
+        leg_pill_desc: 'Красно-белая капсула. Подберите её игроком: если рыба больна — выздоравливает; если здорова — получает иммунитет к болезни на 1 минуту.',
+        leg_booster: 'Бонус: бустер скорости',
+        leg_boosterStatus: 'Бустер активен',
+        leg_boosterStatus_desc: 'Голубая обводка вокруг рыбы — игрок собрал бустер, +20% скорости 10 секунд.',
+        leg_player_desc: 'Это вы — мерцающий фиолетовый круг. Управляете стрелками/WASD/джойстиком или кликом/тапом по полю. Растите, ешьте мелких, плодите союзников. После смерти переходите в самого крупного союзника.',
+        leg_ally_desc: 'Альфа-рыба, дружественная вам. Сама ест врагов и не атакует игрока. Альфа размером ≥6 при контакте с другой альфой плодит нового союзника (оба теряют по 2 размера, кулдаун 5 сек).',
+        leg_prey_desc: 'Любая рыба меньше вас. Можно съесть. Прирост размера зависит от соотношения размеров: чем вы больше, тем меньше прирост от мелочи.',
+        leg_threat_desc: 'Любая рыба больше вас. При столкновении съест вас — вы умрёте, союзники продолжат играть. Спасайтесь или подбирайте щит.',
+        leg_safe_desc: 'Зелёная обводка — безопасная рыба. Сама никого не ест и не растёт. При поедании даёт в 4 раза больше роста (множитель 0.4 вместо 0.1).',
+        leg_sick_desc: 'Коричневая обводка — рыба больна. Двигается в 2 раза медленнее. При поедании даёт в 2 раза меньше роста (множитель 0.05).',
+        leg_shielded_desc: 'Жёлтая обводка — рыба под щитом, её невозможно съесть 5 секунд. Щит может быть у игрока, союзников и врагов.',
+        leg_shield_desc: 'Бонус-предмет (жёлтый круг). Дайте на него игроком — получите 5 секунд неуязвимости: вы не можете быть съедены и не можете быть атакованы.',
+        leg_booster_desc: 'Голубая молния. Подберите её игроком — получите +20% к скорости движения на 10 секунд. Шанс появления — 10% каждую минуту.',
+        log_apOn: 'Автопилот включен', log_apOff: 'Автопилот выключен',
+        log_dbgOn: 'Логика ИИ показана', log_dbgOff: 'Логика ИИ скрыта',
+        log_shieldSpawn: 'Появился щит', log_shieldPick: 'Вы подобрали щит!',
+        log_shieldEnd: 'Действие щита закончилось!',
+        log_boosterSpawn: 'Появился бустер скорости',
+        log_pillSpawn: 'Появилась таблетка',
+        log_pillCure: 'Таблетка вылечила болезнь!',
+        log_pillImmunity: 'Иммунитет к болезни на 60 сек.',
+        log_playerSick: 'Вы заболели — скорость снижена.',
+        log_boosterPick: 'Вы подобрали бустер: +20% скорости на 10 сек!',
+        log_boosterEnd: 'Эффект бустера закончился',
+        log_alphaCollide: 'Столкновение с союзником! Появился новый союзник.',
+        log_alphaAlpha: 'Два союзника столкнулись! Появился новый союзник.',
+        log_eaten: (k, s, inc) => `Съедена ${k} рыба р. ${s} (+${inc})`,
+        log_kindSafe: 'безопасная', log_kindSick: 'больная', log_kindNormal: 'обычная',
+        log_reincarnate: (n) => `Сознание перешло в союзника. Осталось жизней: ${n}.`,
+        log_lastChance: 'Последний союзник. Потеряешь его — конец.',
+        taunts: [
+          'Тебе не выжить.',
+          'Скоро тебя съедят.',
+          'Ты слишком слаб.',
+          'Здесь все охотятся за тобой.',
+          'Беги — пока можешь.',
+          'Ты не дорастёшь.',
+          'Никто не спасёт тебя.',
+          'Эта вода будет красной.',
+          'Считай свои секунды.',
+          'Тебя уже почуяли.'
+        ]
+      },
+      en: {
+        title: 'Fish Eats Fish',
+        size: 'Size', shield: 'Shield', readyBreed: 'Ready to breed', booster: 'Booster',
+        autopilot: 'Autopilot', debug: 'Debug',
+        rules: 'Rules', legend: 'Legend', log: 'Log', howToPlay: 'How to play?', swap: 'Swap sides',
+        rulesAria: 'Rules', legendAria: 'Legend',
+        autopilotTitle: 'Toggle autopilot',
+        debugTitle: 'Show prey/threat arrows — see how the AI thinks',
+        rulesBtnTitle: 'Rules', legendBtnTitle: 'Legend',
+        restartBtnTitle: 'Restart', logToggleTitle: 'Collapse log',
+        dead: 'Dead', gameOver: 'Game over',
+        restartIn: 'Restart in 3 seconds…',
+        victory: 'Victory! Allies cleared the map',
+        introYouAre: 'this is you',
+        btnFight: 'FIGHT!',
+        btnRetry: 'Try again',
+        restartHint: 'Press ↻ in the header to restart',
+        rulesGoal: 'Goal: grow to size 100.',
+        rulesIntro: 'Grow, eat smaller fish, breed allies. Reach size 100 to win.',
+        rules1: 'Arrows/WASD or click — movement (when autopilot is off).',
+        rules2: 'Q — toggle autopilot.',
+        rules3: 'F — show AI logic (prey/threat arrows).',
+        rules4: 'Pick up the yellow shield — 5 seconds of invulnerability.',
+        rules5: 'Blue lightning — speed booster +20% for 10 seconds.',
+        rules6: 'After the player dies, allies keep playing — fish spawn endlessly.',
+        rulesWin: 'Reach size 100 to claim the final victory.',
+        rulesAlpha: 'Allies of size ≥6 breed on encounter every 5 sec: both lose 2 size and a new ally appears. The player can also breed on encounter with an ally.',
+        rulesGrowth: 'Growth slows down as you get bigger: gain ≈ prey_size × 0.1 × (1 − your_size ⁄ 100).',
+        leg_player: 'Player', leg_ally: 'Ally', leg_prey: 'Prey',
+        leg_threat: 'Threat', leg_safe: 'Safe fish',
+        leg_sick: 'Sick fish', leg_shielded: 'Shielded', leg_shield: 'Shield (5 sec)',
+        leg_pill: 'Pill',
+        leg_pill_desc: 'Red-and-white capsule. Pick it up as the player: if you are sick — you are cured; if healthy — gain immunity to disease for 1 minute.',
+        leg_booster: 'Pickup: speed booster',
+        leg_boosterStatus: 'Booster active',
+        leg_boosterStatus_desc: 'Light-blue outline around fish — player picked up a booster, +20% speed for 10 sec.',
+        leg_player_desc: "It's you — the shimmering purple circle. Move with arrows/WASD/joystick or click/tap on the field. Grow, eat smaller fish, breed allies. After death you take over the largest ally.",
+        leg_ally_desc: 'A friendly alpha fish. Hunts enemies on its own and never attacks you. Two allies of size ≥6 in contact spawn a new ally (both lose 2 size, 5-sec cooldown).',
+        leg_prey_desc: 'Any fish smaller than you. Can be eaten. Growth depends on size ratio: the bigger you are, the smaller the gain from tiny prey.',
+        leg_threat_desc: 'Any fish bigger than you. Eats you on contact — you die, but allies keep playing. Run or grab a shield.',
+        leg_safe_desc: 'White peaceful fish. Eats nothing and does not grow. When eaten, gives 4× more growth than a regular fish (0.4 vs 0.1).',
+        leg_sick_desc: 'Moves 2× slower than a regular fish. Gives 2× less growth when eaten (0.05 multiplier). Easy snack early on.',
+        leg_shielded_desc: 'A fish under a shield — cannot be eaten for 5 seconds. Enemies, allies and the player can all be shielded.',
+        leg_shield_desc: 'Yellow bonus orb. Pick it up to gain 5 seconds of invulnerability: cannot be eaten or attacked.',
+        leg_booster_desc: 'Blue lightning. Pick it up to get +20% movement speed for 10 seconds. Spawn chance — 10% per minute.',
+        log_apOn: 'Autopilot enabled', log_apOff: 'Autopilot disabled',
+        log_dbgOn: 'AI logic shown', log_dbgOff: 'AI logic hidden',
+        log_shieldSpawn: 'A shield appeared', log_shieldPick: 'You picked up a shield!',
+        log_shieldEnd: 'Shield expired!',
+        log_boosterSpawn: 'A speed booster appeared',
+        log_pillSpawn: 'A pill appeared',
+        log_pillCure: 'The pill cured your sickness!',
+        log_pillImmunity: 'Disease immunity for 60 sec.',
+        log_playerSick: 'You got sick — speed reduced.',
+        log_boosterPick: 'Booster picked up: +20% speed for 10 sec!',
+        log_boosterEnd: 'Booster effect ended',
+        log_alphaCollide: 'Collided with an ally! A new ally appeared.',
+        log_alphaAlpha: 'Two allies collided! A new ally appeared.',
+        log_eaten: (k, s, inc) => `Ate a ${k} fish size ${s} (+${inc})`,
+        log_kindSafe: 'safe', log_kindSick: 'sick', log_kindNormal: 'regular',
+        log_reincarnate: (n) => `Consciousness moved into an ally. Lives left: ${n}.`,
+        log_lastChance: 'Your last ally. Lose them and it is over.',
+        taunts: [
+          'You will not survive.',
+          'You will be eaten soon.',
+          'You are too weak.',
+          'Everyone here hunts you.',
+          'Run — while you still can.',
+          'You will never grow up.',
+          'No one is coming to save you.',
+          'These waters will turn red.',
+          'Count your seconds.',
+          'They have already smelled you.'
+        ]
+      },
+      zh: {
+        title: '鱼吃鱼',
+        size: '体型', shield: '护盾', readyBreed: '可繁殖', booster: '加速',
+        autopilot: '自动驾驶', debug: '调试',
+        rules: '规则', legend: '图例', log: '日志', howToPlay: '怎么玩？', swap: '换边',
+        rulesAria: '规则', legendAria: '图例',
+        autopilotTitle: '开启/关闭自动驾驶',
+        debugTitle: '显示猎物 / 威胁箭头 — 看清 AI 的思路',
+        rulesBtnTitle: '规则', legendBtnTitle: '图例',
+        restartBtnTitle: '重新开始', logToggleTitle: '折叠日志',
+        dead: '已死亡', gameOver: '游戏结束',
+        restartIn: '3 秒后重启…',
+        victory: '胜利！盟友清空了地图',
+        introYouAre: '这就是你',
+        btnFight: '战斗！',
+        btnRetry: '再试一次',
+        restartHint: '点击顶部 ↻ 重新开始',
+        rulesGoal: '目标：长到 100 体型。',
+        rulesIntro: '成长、吃小鱼、繁殖盟友。长到 100 体型即胜利。',
+        rules1: '方向键/WASD 或点击移动（关闭自动驾驶时）。',
+        rules2: 'Q — 切换自动驾驶。',
+        rules3: 'F — 显示 AI 逻辑（猎物/威胁箭头）。',
+        rules4: '拾取黄色护盾 — 5 秒无敌。',
+        rules5: '蓝色闪电 — 速度加成 +20%，持续 10 秒。',
+        rules6: '玩家死亡后盟友继续游玩，新鱼无限刷新。',
+        rulesWin: '体型达到 100 — 终极胜利。',
+        rulesAlpha: '体型 ≥6 的盟友相遇时每 5 秒繁殖一次：双方减 2 体型，出现新盟友。玩家与盟友相遇时也能繁殖。',
+        rulesGrowth: '体型越大成长越慢：增长 ≈ 猎物体型 × 0.1 × (1 − 你的体型 ⁄ 100)。',
+        leg_player: '玩家', leg_ally: '盟友', leg_prey: '猎物',
+        leg_threat: '威胁', leg_safe: '安全鱼',
+        leg_sick: '病鱼', leg_shielded: '护盾中', leg_shield: '护盾 (5 秒)',
+        leg_pill: '药丸',
+        leg_pill_desc: '红白胶囊。被玩家拾取：如果生病则痊愈；如果健康则获得 1 分钟疾病免疫。',
+        leg_booster: '道具：速度加成',
+        leg_boosterStatus: '加速中',
+        leg_boosterStatus_desc: '鱼身上的浅蓝色轮廓 — 玩家拾取了加速，+20% 速度 10 秒。',
+        leg_player_desc: '就是你。用方向键/WASD 或点击/触摸移动。成长、吃小鱼、繁殖盟友。即使你死了，盟友也会继续游玩。',
+        leg_ally_desc: '友好的 Alpha 鱼。会自己捕食敌人，永不攻击你。两条体型 ≥6 的盟友接触会繁殖出新盟友（双方减 2 体型，5 秒冷却）。',
+        leg_prey_desc: '比你小的任何鱼。可以吃。成长取决于体型比例：你越大，吃小鱼的收益越低。',
+        leg_threat_desc: '比你大的任何鱼。接触会吃掉你 — 你会死，但盟友会继续游玩。逃跑或者抢护盾。',
+        leg_safe_desc: '白色和平鱼。不吃任何鱼，也不成长。被吃时给予 4 倍普通成长（系数 0.4 vs 0.1）。',
+        leg_sick_desc: '速度比普通鱼慢一半。被吃时只给予一半成长（系数 0.05）。前期安全的快餐。',
+        leg_shielded_desc: '处于护盾下的鱼 — 5 秒内不可被吃。敌人、盟友、玩家都可被护盾保护。',
+        leg_shield_desc: '黄色奖励球。让玩家碰到它即可获得 5 秒无敌：无法被吃也无法被攻击。',
+        leg_booster_desc: '蓝色闪电。被玩家拾取后获得 +20% 移动速度，持续 10 秒。每分钟有 10% 几率出现。',
+        log_apOn: '自动驾驶已开启', log_apOff: '自动驾驶已关闭',
+        log_dbgOn: 'AI 逻辑已显示', log_dbgOff: 'AI 逻辑已隐藏',
+        log_shieldSpawn: '出现了护盾', log_shieldPick: '你拾取了护盾！',
+        log_shieldEnd: '护盾效果结束！',
+        log_boosterSpawn: '出现了速度加成',
+        log_pillSpawn: '出现了药丸',
+        log_pillCure: '药丸治愈了疾病！',
+        log_pillImmunity: '疾病免疫 60 秒。',
+        log_playerSick: '你生病了 — 速度下降。',
+        log_boosterPick: '已获得加速：+20% 速度，持续 10 秒！',
+        log_boosterEnd: '加速效果结束',
+        log_alphaCollide: '与盟友碰撞！出现新盟友。',
+        log_alphaAlpha: '两位盟友碰撞！出现新盟友。',
+        log_eaten: (k, s, inc) => `吃掉了一条${k}鱼，体型 ${s} (+${inc})`,
+        log_kindSafe: '安全', log_kindSick: '病', log_kindNormal: '普通',
+        log_reincarnate: (n) => `意识转移到了一名盟友身上。剩余生命：${n}。`,
+        log_lastChance: '最后一名盟友。失去他就结束了。',
+        taunts: [
+          '你活不下来。',
+          '你很快就会被吃掉。',
+          '你太弱了。',
+          '这里所有人都在猎你。',
+          '快跑——趁还能。',
+          '你永远长不大。',
+          '没人会来救你。',
+          '这片水域将会染红。',
+          '数着你的秒数吧。',
+          '他们已经嗅到你了。'
+        ]
+      }
+    };
+    let LANG = 'ru';
+    const t = (key) => {
+      const v = (I18N[LANG] || I18N.ru)[key];
+      return v !== undefined ? v : (I18N.ru[key] || key);
+    };
+    function detectLang() {
+      // 1) Yandex SDK язык; 2) navigator.language; 3) ru
+      const fromSdk = window._ysdk && window._ysdk.environment && window._ysdk.environment.i18n
+        ? window._ysdk.environment.i18n.lang : null;
+      const raw = (fromSdk || navigator.language || 'ru').toLowerCase();
+      if (raw.startsWith('en')) return 'en';
+      if (raw.startsWith('zh')) return 'zh';
+      return 'ru';
+    }
+
+    // ===== UI элементы =====
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const logDiv = document.getElementById('logContent');
+    const sizeValue = document.getElementById('sizeValue');
+    const shieldBadge = document.getElementById('shieldBadge');
+    const boosterBadge = document.getElementById('boosterBadge');
+    const autopilotPill = document.getElementById('autopilotPill');
+    const debugPill = document.getElementById('debugPill');
+    const restartBtn = document.getElementById('restartBtn');
+    const howToPlayBtn = document.getElementById('howToPlayBtn');
+    const swapSidesBtn = document.getElementById('swapSidesBtn');
+    const introStartBtn = document.getElementById('introStartBtn');
+    const retryBtn = document.getElementById('retryBtn');
+    const logPanel = document.getElementById('logPanel');
+    const rulesList = document.getElementById('rulesList');
+    const legendList = document.getElementById('legendList');
+    const rulesPopover = document.getElementById('rulesPopover');
+    const legendPopover = document.getElementById('legendPopover');
+
+    // ===== Константы игры =====
+    const WORLD_SIZE = 200;
+    const MARGIN = 8;
+    const MIN_SIZE = 1;
+    const MAX_SIZE = 100;
+    const START_MAX_SIZE = 10;
+    const GLOBAL_SPEED = 33.33;
+    const PLAYER_SPEED = GLOBAL_SPEED * 1.7;
+    const SAFE_FISH_CHANCE = 0.05;
+    const SICK_FISH_CHANCE = 0.0001;
+    const SHIELD_SPAWN_CHANCE = 0.3;
+    const SHIELD_DURATION = 5000;
+    const FLASH_DURATION = 0.2;
+    const FISH_SPAWN_INTERVAL = 1500;
+    const LEVEL1_FISH_SPAWN_INTERVAL = 1000;
+    const SHIELD_SPAWN_INTERVAL = 5000;
+    const TRACE_LENGTH = 1000;
+    const EAT_FLASH_COLOR = 'orange';
+    const WANDER_ANGLE_CHANGE = Math.PI / 6;
+    const ALPHA_FISH = true;
+    const ALPHA_BREED_COOLDOWN = 5000;
+    const ALPHA_BREED_MIN_SIZE = 6;
+
+    // ===== Бустер скорости =====
+    const SPEED_BOOSTER_DURATION = 10000;       // 10 сек эффекта
+    const SPEED_BOOSTER_BONUS = 0.2;            // +20% скорости
+    const SPEED_BOOSTER_SPAWN_INTERVAL = 60000; // проверка раз в минуту
+    const SPEED_BOOSTER_SPAWN_CHANCE = 0.1;     // 10% шанс
+    const SPEED_BOOSTER_VISIBLE_DURATION = 30000; // молния видна 30 сек на поле
+    // ===== Таблетка (лекарство) =====
+    const PILL_IMMUNITY_DURATION = 60000;       // 1 минута иммунитета к болезни
+    const PILL_SPAWN_INTERVAL = 75000;          // проверка раз в 1.25 мин
+    const PILL_SPAWN_CHANCE = 0.45;             // шанс появления
+    const PILL_VISIBLE_DURATION = 30000;        // таблетка видна 30 сек на поле
+    const SPAWN_IMMUNITY_MS = 1500;             // время неуязвимости новой рыбы
+    const SPAWN_SAFE_PADDING = 8;               // пэддинг при поиске безопасной точки спавна
+
+    const corners = [
+      { x: -WORLD_SIZE, y: -WORLD_SIZE }, { x: -WORLD_SIZE, y: WORLD_SIZE },
+      { x: WORLD_SIZE, y: -WORLD_SIZE }, { x: WORLD_SIZE, y: WORLD_SIZE }
+    ];
+    const borders = [
+      { x: -WORLD_SIZE, y: 0 }, { x: WORLD_SIZE, y: 0 },
+      { x: 0, y: -WORLD_SIZE }, { x: 0, y: WORLD_SIZE }
+    ];
+
+    // ===== Состояние игры =====
+    let player = { x: 0, y: 0, size: 5, spawnTime: 0, shieldedUntil: 0, isShielded: false, vx: 0, vy: 0, wanderAngle: 0, lastWanderChange: 0, lastBreedTime: 0, isDead: false, speedBoostUntil: 0, isSick: false, pillImmunityUntil: 0 };
+    let otherFish = [];
+    let shields = [];
+    let speedBoosters = [];
+    let lastSpeedBoosterSpawn = 0;
+    let pills = [];
+    let lastPillSpawn = 0;
+    let eatEffects = [];
+    // Атмосфера и эффекты
+    let bubbles = [];
+    let splashes = [];
+    // Стартовая интро-анимация: камера приближена к игроку, стрелка
+    // и подпись «это ты», затем плавный отдалённый зум до нормального масштаба.
+    // Состояния: 'none', 'wait' (ждём кнопку «В БОЙ!»), 'hold' (автопауза при
+    // рестарте), 'zoom' (анимация отдаления).
+    let introPhase = 'none';
+    let introPhaseStart = 0;
+    const INTRO_HOLD_MS = 1000;     // держим приближенный план при рестарте
+    const INTRO_ZOOM_MS = 1500;     // время отдаления до нормального масштаба
+    let loadingReadyFired = false;  // один раз за загрузку страницы
+
+    let lastTauntTime = 0;          // время последней провокации в логе
+    let nextTauntDelay = 9000;      // случайный интервал между провокациями (мс)
+    let gameOver = false;
+    let gameWon = false;
+    let autopilot = false;
+    let debugAI = false;
+    let pressedKeys = {};
+    let targetX = null;
+    let targetY = null;
+    let flashX = null;
+    let flashY = null;
+    let flashTimer = 0;
+    let lastSpawnTime = 0;
+    let lastLevel1SpawnTime = 0;
+    let lastShieldSpawnTime = 0;
+    let lastTime = performance.now();
+
+    let SCALE = 1;
+    function resizeCanvas() {
+      const wrap = canvas.parentElement;
+      if (!wrap) return;
+      const w = Math.max(1, wrap.clientWidth);
+      const h = Math.max(1, wrap.clientHeight);
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+      canvas.style.width = w + 'px';
+      canvas.style.height = h + 'px';
+      SCALE = Math.min(
+        canvas.width / ((WORLD_SIZE * 2) + MARGIN * 2),
+        canvas.height / ((WORLD_SIZE * 2) + MARGIN * 2)
+      );
+    }
+    window.addEventListener('resize', resizeCanvas);
+    // Также реагируем на изменение размеров игровой обёртки (например, когда
+    // Яндекс встраивает рекламную панель сбоку — wrap.clientWidth меняется).
+    if (typeof ResizeObserver !== 'undefined') {
+      try {
+        const ro = new ResizeObserver(() => resizeCanvas());
+        const wrapEl = document.getElementById('gameBackground');
+        if (wrapEl) ro.observe(wrapEl);
+      } catch (e) { /* noop */ }
+    }
+    // Реакция на смену ориентации мобильного устройства.
+    window.addEventListener('orientationchange', () => {
+      setTimeout(resizeCanvas, 200);
+    });
+
+    // ===== Утилиты =====
+    const getRadius = size => 5 + (size - 1) * (25 / 99);
+    const getDetectionRadius = (size, isPlayer = false) => getRadius(size) * (isPlayer ? 8 : 4);
+    // Прирост массы при поедании: чем крупнее хищник, тем меньше прирост.
+    // Базовая формула: prey.size × baseFactor × (1 − predator.size / MAX_SIZE)^0.7.
+    // Безопасная рыба даёт ×4, больная ×0.5 от обычной.
+    function computeGrowth(predator, prey) {
+      const base = prey.isSafe ? 0.4 : (prey.isSick ? 0.05 : 0.1);
+      const sizeDiminish = Math.pow(Math.max(0, 1 - predator.size / MAX_SIZE), 0.7);
+      return prey.size * base * sizeDiminish;
+    }
+    // Поиск точки, не пересекающейся с существующими большими сущностями
+    function findSafeSpawnPos(maxAttempts = 12, requiredClearance = SPAWN_SAFE_PADDING) {
+      for (let i = 0; i < maxAttempts; i++) {
+        const x = Math.random() * (WORLD_SIZE * 2) - WORLD_SIZE;
+        const y = Math.random() * (WORLD_SIZE * 2) - WORLD_SIZE;
+        const playerR = getRadius(player.size) + requiredClearance;
+        const dxP = x - player.x, dyP = y - player.y;
+        if (Math.sqrt(dxP * dxP + dyP * dyP) < playerR) continue;
+        let bad = false;
+        for (const fish of otherFish) {
+          const r = getRadius(fish.size) + requiredClearance;
+          const dx = x - fish.x, dy = y - fish.y;
+          if (dx * dx + dy * dy < r * r) { bad = true; break; }
+        }
+        if (!bad) return { x, y };
+      }
+      // fallback — край карты, чтобы точно ни в кого не залезть
+      const sx = (Math.random() < 0.5 ? -1 : 1) * (WORLD_SIZE - 5);
+      const sy = (Math.random() < 0.5 ? -1 : 1) * (WORLD_SIZE - 5);
+      return { x: sx, y: sy };
+    }
+    const logMessage = message => {
+      const time = new Date().toLocaleTimeString();
+      logDiv.innerHTML += `<div>[${time}] ${message}</div>`;
+      logDiv.scrollTop = logDiv.scrollHeight;
+    };
+    // Жирные красные провокации в логе — для атмосферы хардкора.
+    const logTaunt = message => {
+      const time = new Date().toLocaleTimeString();
+      logDiv.innerHTML += `<div class="log-taunt">[${time}] ${message}</div>`;
+      logDiv.scrollTop = logDiv.scrollHeight;
+    };
+    function maybeShowTaunt(timestamp) {
+      // Не провоцируем после полной смерти и в ближайшие 4 сек после старта.
+      if (player.isDead) return;
+      if (timestamp < 4000) return;
+      if (timestamp - lastTauntTime < nextTauntDelay) return;
+      const list = (I18N[LANG] || I18N.ru).taunts || I18N.ru.taunts;
+      if (!list || !list.length) return;
+      logTaunt(list[Math.floor(Math.random() * list.length)]);
+      lastTauntTime = timestamp;
+      // Случайный интервал 8–18 сек, чтобы не приедалось.
+      nextTauntDelay = 8000 + Math.floor(Math.random() * 10000);
+    }
+    // Лёгкая анимация синих брызг (используется при перерождении игрока).
+    function spawnSplash(x, y, count = 18, color) {
+      const c = color || 'rgba(200,30,30,'; // кровавый по умолчанию
+      for (let i = 0; i < count; i++) {
+        const angle = (i / count) * Math.PI * 2 + Math.random() * 0.5;
+        const speed = 30 + Math.random() * 35;
+        splashes.push({
+          x, y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 0,
+          maxLife: 0.55 + Math.random() * 0.25,
+          color: c
+        });
+      }
+    }
+    // Атмосферные пузырьки в воде.
+    function initBubbles(count = 36) {
+      bubbles = [];
+      for (let i = 0; i < count; i++) {
+        bubbles.push({
+          x: Math.random() * (WORLD_SIZE * 2) - WORLD_SIZE,
+          y: Math.random() * (WORLD_SIZE * 2) - WORLD_SIZE,
+          r: 0.5 + Math.random() * 1.6,
+          vy: -3 - Math.random() * 5,
+          drift: (Math.random() - 0.5) * 1.2,
+          alpha: 0.18 + Math.random() * 0.25,
+          phase: Math.random() * Math.PI * 2
+        });
+      }
+    }
+    // Радиус-aware отражение: внешний край рыбы не выходит за границу мира.
+    // На углах суммируется отталкивание по обоим осям.
+    const reflect = (position, velocity, min, max, radius = 0) => {
+      if (position - radius < min) { position = min + radius; velocity = Math.abs(velocity); }
+      else if (position + radius > max) { position = max - radius; velocity = -Math.abs(velocity); }
+      return { position, velocity };
+    };
+    const applyVelocity = (fish, dt) => {
+      fish.x += fish.vx * dt;
+      fish.y += fish.vy * dt;
+      const r = getRadius(fish.size);
+      let resX = reflect(fish.x, fish.vx, -WORLD_SIZE, WORLD_SIZE, r);
+      fish.x = resX.position; fish.vx = resX.velocity;
+      let resY = reflect(fish.y, fish.vy, -WORLD_SIZE, WORLD_SIZE, r);
+      fish.y = resY.position; fish.vy = resY.velocity;
+    };
+    // Отталкивание от стен по расстоянию от ВНЕШНЕГО КРАЯ рыбы до стены —
+    // чтобы рыба могла подплыть к стенке внешним контуром (edge=0 = касание).
+    // Сила нарастает квадратично к стене: вдалеке вообще нет «магнитного»
+    // эффекта, у самой стены push становится резко доминирующим — это не
+    // даёт хищникам затолкать игрока в угол.
+    const wallAvoidance = (x, y, radius) => {
+      const buffer = 12; // ширина зоны редиректа от внешнего края рыбы
+      let pushX = 0, pushY = 0;
+      const eL = (x - (-WORLD_SIZE)) - radius;
+      const eR = (WORLD_SIZE - x) - radius;
+      const eT = (y - (-WORLD_SIZE)) - radius;
+      const eB = (WORLD_SIZE - y) - radius;
+      const f = e => {
+        if (e >= buffer) return 0;
+        // 1 при касании (e=0), мягкий рост от границы зоны.
+        const t = Math.max(0, Math.min(1.4, (buffer - e) / buffer));
+        return t * t;
+      };
+      pushX += f(eL) - f(eR);
+      pushY += f(eT) - f(eB);
+      return { x: pushX, y: pushY };
+    };
+    const createFish = (x, y, size, vx, vy, isSafe, isSick, isAlpha = false) => ({
+      x, y, size, vx, vy, isSafe, isSick, isAlpha,
+      spawnTime: performance.now(),
+      shieldedUntil: 0,
+      isShielded: false,
+      trace: [],
+      wanderAngle: Math.random() * 2 * Math.PI,
+      lastWanderChange: performance.now(),
+      lastBreedTime: 0
+    });
+    const calculateSpeedFactor = (size, isSick) => {
+      const baseSpeed = 1 - (size / MAX_SIZE * 0.01);
+      return baseSpeed * (isSick ? 0.5 : 1);
+    };
+    const updateFishTrace = (fish, timestamp) => {
+      fish.trace.push({ x: fish.x, y: fish.y, t: timestamp });
+      fish.trace = fish.trace.filter(p => timestamp - p.t < TRACE_LENGTH);
+    };
+    const handleShield = (obj, timestamp) => {
+      obj.shieldedUntil = (obj.isShielded && obj.shieldedUntil > timestamp)
+        ? obj.shieldedUntil + SHIELD_DURATION : timestamp + SHIELD_DURATION;
+      obj.isShielded = true;
+    };
+
+    // ===== Автопилот =====
+    // Готов ли entity к размножению с другой альфой
+    const canBreed = (entity, timestamp) => {
+      const ready = entity.size >= ALPHA_BREED_MIN_SIZE
+        && (timestamp - (entity.lastBreedTime || 0)) >= ALPHA_BREED_COOLDOWN;
+      // К размножению способны альфы и игрок
+      return ready && (entity.isAlpha || entity === player);
+    };
+
+    const calculateAutopilotVector = (entity, timestamp, others) => {
+      let runVectorX = 0, runVectorY = 0;
+      let hasTarget = false;
+      let primaryThreat = null, primaryPrey = null;
+      let closestThreatDist = Infinity, closestPreyDist = Infinity;
+
+      const entityCanBreed = canBreed(entity, timestamp);
+      const detectionRadius = getDetectionRadius(entity.size, true);
+
+      for (const other of others) {
+        if (!otherFish.includes(other) || other.isShielded || (other === player && player.isDead)) continue;
+
+        const dx = other.x - entity.x;
+        const dy = other.y - entity.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance >= detectionRadius || distance <= 0) continue;
+
+        // Альфа поблизости — особый кейс
+        if (other.isAlpha && other !== entity) {
+          // Если оба готовы размножаться — летим друг к другу как к "добыче" с двойным весом
+          if (entityCanBreed && canBreed(other, timestamp)) {
+            hasTarget = true;
+            const dirX = dx / distance, dirY = dy / distance;
+            runVectorX += (dirX / distance) * 2;
+            runVectorY += (dirY / distance) * 2;
+            if (distance < closestPreyDist) { closestPreyDist = distance; primaryPrey = other; }
+          }
+          // Иначе альфы и игрок просто игнорируют друг друга (союзники)
+          continue;
+        }
+
+        // Обычная логика: больше — угроза, меньше — добыча
+        hasTarget = true;
+        if (other.size > entity.size) {
+          const directionX = -dx / distance;
+          const directionY = -dy / distance;
+          runVectorX += directionX / distance;
+          runVectorY += directionY / distance;
+          if (distance < closestThreatDist) { closestThreatDist = distance; primaryThreat = other; }
+        } else if (other.size < entity.size && (timestamp - other.spawnTime >= SPAWN_IMMUNITY_MS)) {
+          const directionX = dx / distance;
+          const directionY = dy / distance;
+          runVectorX += directionX / distance;
+          runVectorY += directionY / distance;
+          if (distance < closestPreyDist) { closestPreyDist = distance; primaryPrey = other; }
+        }
+      }
+
+      let result;
+      const r = getRadius(entity.size);
+      const wn = wallAvoidance(entity.x, entity.y, r);
+      const wnMag = Math.hypot(wn.x, wn.y);
+
+      // === Smart wall steering (только при наличии угрозы) ===
+      // При угрозе и приближении к стенам направляем рыбу по КАСАТЕЛЬНОЙ
+      // вдоль стены (вместо упора). В углу две стены — и у обоих тангенсов
+      // равная проекция; тогда тай-брейк через wanderAngle, который не
+      // обновляется здесь (никакой обратной связи), а медленно дрейфует во
+      // время блуждания. Это даёт устойчивое направление выхода из угла.
+      const fleeMagSq = runVectorX * runVectorX + runVectorY * runVectorY;
+      let tangentApplied = false;
+      if (primaryThreat && wnMag > 0.1 && fleeMagSq > 1e-8) {
+        const wnNx = wn.x / wnMag;
+        const wnNy = wn.y / wnMag;
+        const onNormal = runVectorX * wnNx + runVectorY * wnNy;
+        if (onNormal < 0) {
+          const t1x = -wnNy, t1y = wnNx;
+          const t2x = wnNy, t2y = -wnNx;
+          const fleeMag = Math.sqrt(fleeMagSq);
+          const fnx = runVectorX / fleeMag;
+          const fny = runVectorY / fleeMag;
+          // Основной критерий — совпадение с направлением бегства.
+          let s1 = fnx * t1x + fny * t1y;
+          let s2 = fnx * t2x + fny * t2y;
+          // Доп. критерий «убегания внутрь карты»: проекция тангенса на
+          // вектор от рыбы к центру мира. Помогает однозначно выходить из
+          // углов в сторону открытого пространства.
+          const cx = -entity.x, cy = -entity.y;
+          const cm = Math.hypot(cx, cy) || 1;
+          const cxN = cx / cm, cyN = cy / cm;
+          s1 += (cxN * t1x + cyN * t1y) * 0.7;
+          s2 += (cxN * t2x + cyN * t2y) * 0.7;
+          // Слабая стабильность через wanderAngle — детерминистический тай-брейк.
+          const cw = Math.cos(entity.wanderAngle);
+          const sw = Math.sin(entity.wanderAngle);
+          s1 += (cw * t1x + sw * t1y) * 0.15;
+          s2 += (cw * t2x + sw * t2y) * 0.15;
+          const tx = s1 >= s2 ? t1x : t2x;
+          const ty = s1 >= s2 ? t1y : t2y;
+          // Усиливаем тангенс — чтобы перемещение вдоль стены было заметным.
+          runVectorX = tx * (fleeMag + 0.5);
+          runVectorY = ty * (fleeMag + 0.5);
+          // Лёгкий wall-push, чтобы не прижиматься к стене.
+          runVectorX += wn.x * 1.5;
+          runVectorY += wn.y * 1.5;
+          tangentApplied = true;
+        }
+      }
+
+      // НЕТ автоматического wallAvoidance в нетангенциальной ветке —
+      // иначе рыба не может коснуться стены своим внешним контуром.
+      // При свободном движении (нет угрозы или угроза не толкает в стену)
+      // граница обрабатывается жёстким клампом в reflect/applyVelocity.
+
+      const magnitude = Math.hypot(runVectorX, runVectorY);
+      if (magnitude > 0.005) {
+        result = { x: runVectorX / magnitude, y: runVectorY / magnitude };
+      } else {
+        // Стабильное блуждание — wanderAngle меняется не чаще 1 раза в сек.
+        if (timestamp - entity.lastWanderChange >= 1000) {
+          entity.wanderAngle += (Math.random() * 2 - 1) * WANDER_ANGLE_CHANGE;
+          entity.lastWanderChange = timestamp;
+        }
+        let wanderX = Math.cos(entity.wanderAngle);
+        let wanderY = Math.sin(entity.wanderAngle);
+        // В блуждании отталкиваем от стены ТОЛЬКО если wanderAngle ведёт в
+        // стену — иначе рыба может спокойно скользить вдоль края, касаясь
+        // его внешним контуром. При входе в стену — мягкий тангенциальный
+        // разворот, чтобы рыба не «ткнулась» и не залипла на 1 секунду.
+        if (wnMag > 0.1) {
+          const wnNx = wn.x / wnMag, wnNy = wn.y / wnMag;
+          const wanderOnNormal = wanderX * wnNx + wanderY * wnNy;
+          if (wanderOnNormal < 0) {
+            // Заменяем нормальную компоненту на тангенциальную сторону «к
+            // открытому пространству» (центру), чтобы выйти из угла.
+            const t1x = -wnNy, t1y = wnNx;
+            const t2x = wnNy, t2y = -wnNx;
+            const cx = -entity.x, cy = -entity.y;
+            const cm = Math.hypot(cx, cy) || 1;
+            const cxN = cx / cm, cyN = cy / cm;
+            const s1 = cxN * t1x + cyN * t1y;
+            const s2 = cxN * t2x + cyN * t2y;
+            const tx = s1 >= s2 ? t1x : t2x;
+            const ty = s1 >= s2 ? t1y : t2y;
+            wanderX = tx + wn.x * 0.5;
+            wanderY = ty + wn.y * 0.5;
+            const m = Math.hypot(wanderX, wanderY) || 1;
+            wanderX /= m; wanderY /= m;
+            // Запоминаем угол скольжения, чтобы wanderAngle не возвращал
+            // рыбу обратно в стену через миллисекунды.
+            entity.wanderAngle = Math.atan2(wanderY, wanderX);
+          }
+        }
+        result = { x: wanderX, y: wanderY };
+      }
+
+      return { vector: result, threat: primaryThreat, prey: primaryPrey };
+    };
+
+    // ===== Спавн =====
+    const generateInitialFish = (count = 45) => {
+      for (let i = 0; i < count; i++) {
+        const { x, y } = findSafeSpawnPos(8, 6);
+        const size = MIN_SIZE + Math.random() * (START_MAX_SIZE - MIN_SIZE);
+        const isSafe = Math.random() < SAFE_FISH_CHANCE;
+        const isSick = isSafe ? false : (Math.random() < SICK_FISH_CHANCE);
+        const speedFactor = calculateSpeedFactor(size, isSick);
+        const angle = Math.random() * 2 * Math.PI;
+        const vx = GLOBAL_SPEED * speedFactor * Math.cos(angle);
+        const vy = GLOBAL_SPEED * speedFactor * Math.sin(angle);
+        otherFish.push(createFish(x, y, size, vx, vy, isSafe, isSick));
+      }
+      if (ALPHA_FISH) otherFish.push(createFish(10, 10, 5, 0, 0, false, false, true));
+    };
+    const addNewFish = (count = 1) => {
+      for (let i = 0; i < count; i++) {
+        const { x, y } = findSafeSpawnPos();
+        const sizeVariation = (Math.random() * 20 - 10);
+        let size = Math.max(MIN_SIZE, Math.min(MAX_SIZE, player.size + sizeVariation));
+        const isSafe = Math.random() < SAFE_FISH_CHANCE;
+        const isSick = isSafe ? false : (Math.random() < SICK_FISH_CHANCE);
+        const speedFactor = calculateSpeedFactor(size, isSick);
+        const angle = Math.random() * 2 * Math.PI;
+        const vx = GLOBAL_SPEED * speedFactor * Math.cos(angle);
+        const vy = GLOBAL_SPEED * speedFactor * Math.sin(angle);
+        otherFish.push(createFish(x, y, size, vx, vy, isSafe, isSick));
+      }
+    };
+    const spawnLevel1Fish = () => {
+      const { x, y } = findSafeSpawnPos();
+      const isSafe = Math.random() < SAFE_FISH_CHANCE;
+      const isSick = false;
+      const speedFactor = calculateSpeedFactor(MIN_SIZE, isSick);
+      const angle = Math.random() * 2 * Math.PI;
+      const vx = GLOBAL_SPEED * speedFactor * Math.cos(angle);
+      const vy = GLOBAL_SPEED * speedFactor * Math.sin(angle);
+      otherFish.push(createFish(x, y, MIN_SIZE, vx, vy, isSafe, isSick));
+    };
+    const spawnShield = () => {
+      const { x, y } = findSafeSpawnPos();
+      shields.push({ x, y, spawnTime: performance.now() });
+      logMessage(t('log_shieldSpawn'));
+    };
+    const spawnSpeedBooster = () => {
+      const { x, y } = findSafeSpawnPos();
+      speedBoosters.push({ x, y, spawnTime: performance.now() });
+      logMessage(t('log_boosterSpawn'));
+    };
+    const spawnPill = () => {
+      const { x, y } = findSafeSpawnPos();
+      pills.push({ x, y, spawnTime: performance.now() });
+      logMessage(t('log_pillSpawn'));
+    };
+
+    // ===== Легенда / правила =====
+    // SVG-щит для легенды (геральдическая форма).
+    const SHIELD_SVG =
+      '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+        '<path d="M 4 5 Q 12 2 20 5 L 20 12 Q 20 19 12 22 Q 4 19 4 12 Z" ' +
+              'fill="rgb(255,204,0)" stroke="rgb(180,120,0)" stroke-width="1.4" stroke-linejoin="round"/>' +
+      '</svg>';
+    // SVG-таблетка (капсула) для легенды.
+    const PILL_SVG =
+      '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+        '<defs><clipPath id="pillClip"><rect x="3" y="9" width="18" height="6" rx="3" ry="3"/></clipPath></defs>' +
+        '<rect x="3" y="9" width="18" height="6" rx="3" ry="3" fill="white" stroke="rgb(180,40,40)" stroke-width="1.2"/>' +
+        '<rect x="3" y="9" width="9" height="6" fill="rgb(225,60,60)" clip-path="url(#pillClip)"/>' +
+      '</svg>';
+    // SVG-молния для пункта «Бустер скорости» (Material Icons-style path).
+    const BOLT_SVG =
+      '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+        '<path d="M 7 21 L 17 12 L 12 12 L 16 3 L 8 12 L 13 12 Z" ' +
+              'fill="rgb(95,189,255)" stroke="rgb(10,120,216)" stroke-width="1.6" stroke-linejoin="round"/>' +
+      '</svg>';
+
+    function buildLegend() {
+      const ll = document.getElementById('legendList');
+      if (!ll) return;
+      const items = [
+        { swatch: 'background:hsla(285,75%,55%,0.95);border-color:#7a3eb0', text: t('leg_player'), desc: t('leg_player_desc') },
+        ALPHA_FISH ? { swatch: 'background:rgba(10,132,255,0.85);border-color:#0a84ff', text: t('leg_ally'), desc: t('leg_ally_desc') } : null,
+        { swatch: 'background:rgba(52,199,89,0.8);border-color:#34c759', text: t('leg_prey'), desc: t('leg_prey_desc') },
+        { swatch: 'background:rgba(255,59,48,0.8);border-color:#ff3b30', text: t('leg_threat'), desc: t('leg_threat_desc') },
+        { swatch: 'background:rgba(180,180,180,0.4);border-color:#34c759;box-shadow:inset 0 0 0 2px #34c759', text: t('leg_safe'), desc: t('leg_safe_desc') },
+        { swatch: 'background:rgba(180,180,180,0.4);border-color:rgba(139,69,19,0.95);box-shadow:inset 0 0 0 2px rgba(139,69,19,0.95)', text: t('leg_sick'), desc: t('leg_sick_desc') },
+        { swatch: 'background:rgba(180,180,180,0.4);border-color:rgba(255,204,0,0.95);box-shadow:inset 0 0 0 2px rgba(255,204,0,0.95)', text: t('leg_shielded'), desc: t('leg_shielded_desc') },
+        { swatch: 'background:rgba(180,180,180,0.4);border-color:rgba(95,189,255,0.95);box-shadow:inset 0 0 0 2px rgba(95,189,255,0.95)', text: t('leg_boosterStatus'), desc: t('leg_boosterStatus_desc') },
+        { icon: 'shield', text: t('leg_shield'), desc: t('leg_shield_desc') },
+        { icon: 'pill', text: t('leg_pill'), desc: t('leg_pill_desc') },
+        { icon: 'bolt', text: t('leg_booster'), desc: t('leg_booster_desc') }
+      ].filter(Boolean);
+      ll.innerHTML = items.map(it => {
+        let swatchHtml;
+        if (it.icon === 'bolt') swatchHtml = '<span class="legend-swatch is-bolt">' + BOLT_SVG + '</span>';
+        else if (it.icon === 'shield') swatchHtml = '<span class="legend-swatch is-bolt">' + SHIELD_SVG + '</span>';
+        else if (it.icon === 'pill') swatchHtml = '<span class="legend-swatch is-bolt">' + PILL_SVG + '</span>';
+        else swatchHtml = '<span class="legend-swatch" style="' + it.swatch + '"></span>';
+        return '<li><details><summary>' + swatchHtml +
+          '<span>' + it.text + '</span>' +
+        '</summary>' +
+        '<p class="legend-desc">' + it.desc + '</p>' +
+        '</details></li>';
+      }).join('');
+    }
+    function updateRules() {
+      const rl = document.getElementById('rulesList');
+      if (!rl) return;
+      const items = [t('rules1'), t('rules2'), t('rules3'), t('rules4'), t('rules5'), t('rules6'), t('rulesWin'), t('rulesGrowth')];
+      rl.innerHTML = items.map(it => `<li>${it}</li>`).join('');
+      if (ALPHA_FISH) {
+        const li = document.createElement('li');
+        li.textContent = t('rulesAlpha');
+        rl.appendChild(li);
+      }
+    }
+    function applyI18n() {
+      document.documentElement.lang = LANG === 'zh' ? 'zh-Hans' : LANG;
+      document.title = t('title');
+      // Заголовок шапки
+      const appTitle = document.querySelector('.app-title');
+      if (appTitle) {
+        appTitle.innerHTML = '<span class="logo-dot"></span>' + t('title');
+      }
+      const sizeLabel = document.querySelector('.size-label');
+      if (sizeLabel) sizeLabel.textContent = t('size');
+      shieldBadge.innerHTML = '<span class="dot"></span>' + t('shield');
+      boosterBadge.innerHTML = '<span class="dot"></span>' + t('booster');
+      autopilotPill.innerHTML = '<span class="pill-dot"></span>' + t('autopilot') + ' <span class="kbd">Q</span>';
+      autopilotPill.title = t('autopilotTitle');
+      debugPill.innerHTML = '<span class="pill-dot"></span>' + t('debug') + ' <span class="kbd">F</span>';
+      debugPill.title = t('debugTitle');
+      restartBtn.title = t('restartBtnTitle'); restartBtn.setAttribute('aria-label', t('restartBtnTitle'));
+      if (howToPlayBtn) howToPlayBtn.innerHTML = '<span class="pill-dot"></span>' + t('howToPlay');
+      if (introStartBtn) introStartBtn.textContent = t('btnFight');
+      if (retryBtn) retryBtn.textContent = t('btnRetry');
+      const logTitleEl = document.querySelector('.log-title');
+      if (logTitleEl) logTitleEl.textContent = t('log');
+      // Popover'ы
+      rulesPopover.setAttribute('aria-label', t('rulesAria'));
+      const rulesH3 = document.querySelector('#rulesPopover h3');
+      if (rulesH3) rulesH3.textContent = t('rules');
+      const rulesTextEl = document.querySelector('#rulesPopover .rules-text');
+      if (rulesTextEl) {
+        rulesTextEl.innerHTML =
+          '<p>' + t('rulesGoal') + '</p>' +
+          '<p>' + t('rulesIntro') + '</p>' +
+          '<ul id="rulesList"></ul>';
+      }
+      legendPopover.setAttribute('aria-label', t('legendAria'));
+      const legendH3 = document.querySelector('#legendPopover h3');
+      if (legendH3) legendH3.textContent = t('legend');
+      // Перестроить динамический контент
+      buildLegend();
+      updateRules();
+    }
+
+    // ===== Коллизии =====
+    const handleFishCollisions = (fish1, fish2, timestamp) => {
+      const t1 = timestamp - fish1.spawnTime, t2 = timestamp - fish2.spawnTime;
+      if (t1 < SPAWN_IMMUNITY_MS || t2 < SPAWN_IMMUNITY_MS) return null;
+      const dx = fish1.x - fish2.x, dy = fish1.y - fish2.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance < getRadius(fish1.size) + getRadius(fish2.size)) {
+        if (fish1.isAlpha && fish2.isAlpha && !fish1.isShielded && !fish2.isShielded) {
+          if (fish1.size >= ALPHA_BREED_MIN_SIZE && fish2.size >= ALPHA_BREED_MIN_SIZE &&
+              timestamp - fish1.lastBreedTime >= ALPHA_BREED_COOLDOWN && timestamp - fish2.lastBreedTime >= ALPHA_BREED_COOLDOWN) {
+            fish1.size -= 2; fish2.size -= 2;
+            fish1.lastBreedTime = timestamp; fish2.lastBreedTime = timestamp;
+            otherFish.push(createFish(fish1.x, fish1.y, 2, 0, 0, false, false, true));
+            logMessage(t('log_alphaAlpha'));
+          }
+          return null;
+        }
+        if (fish1.size > fish2.size && !fish2.isShielded && !fish1.isSafe && !fish2.isAlpha) {
+          fish1.size = Math.min(MAX_SIZE, fish1.size + computeGrowth(fish1, fish2));
+          eatEffects.push({ x: fish2.x, y: fish2.y, size: fish2.size, timer: FLASH_DURATION });
+          return fish2;
+        } else if (fish2.size > fish1.size && !fish1.isShielded && !fish2.isSafe && !fish1.isAlpha) {
+          fish2.size = Math.min(MAX_SIZE, fish2.size + computeGrowth(fish2, fish1));
+          eatEffects.push({ x: fish1.x, y: fish1.y, size: fish1.size, timer: FLASH_DURATION });
+          return fish1;
+        }
+      }
+      return null;
+    };
+    const handlePlayerCollisions = (fish, timestamp) => {
+      const timeSinceSpawn = timestamp - fish.spawnTime;
+      if (timeSinceSpawn < SPAWN_IMMUNITY_MS || player.isDead) return;
+      const dx = fish.x - player.x, dy = fish.y - player.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance < getRadius(player.size) + getRadius(fish.size)) {
+        if (fish.isAlpha && !player.isShielded && !fish.isShielded) {
+          if (player.size >= ALPHA_BREED_MIN_SIZE && fish.size >= ALPHA_BREED_MIN_SIZE &&
+              timestamp - player.lastBreedTime >= ALPHA_BREED_COOLDOWN && timestamp - fish.lastBreedTime >= ALPHA_BREED_COOLDOWN) {
+            player.size -= 2; fish.size -= 2;
+            player.lastBreedTime = timestamp; fish.lastBreedTime = timestamp;
+            otherFish.push(createFish(player.x, player.y, 2, 0, 0, false, false, true));
+            logMessage(t('log_alphaCollide'));
+          }
+          return false;
+        }
+        if (player.size > fish.size && !fish.isShielded && !fish.isAlpha) {
+          const sizeIncrease = computeGrowth(player, fish);
+          const kind = fish.isSafe ? t('log_kindSafe') : (fish.isSick ? t('log_kindSick') : t('log_kindNormal'));
+          logMessage(t('log_eaten')(kind, fish.size.toFixed(2), sizeIncrease.toFixed(2)));
+          player.size = Math.min(MAX_SIZE, player.size + sizeIncrease);
+          flashX = player.x; flashY = player.y;
+          flashTimer = FLASH_DURATION;
+          eatEffects.push({ x: fish.x, y: fish.y, size: fish.size, timer: FLASH_DURATION });
+          spawnSplash(fish.x, fish.y, 6);
+          addNewFish(1);
+          return true;
+        } else if (fish.size > player.size && !player.isShielded && !fish.isSafe && !fish.isAlpha) {
+          player.isDead = true;
+          eatEffects.push({ x: player.x, y: player.y, size: player.size * 2, timer: FLASH_DURATION * 2 });
+          // Если есть живые союзники — переселяемся. Иначе game over.
+          if (tryReincarnateAsAlly()) {
+            // успешное перерождение — gameOver не выставляется
+          } else {
+            gameOver = true;
+            const wrap = document.getElementById('gameBackground');
+            wrap.style.backgroundColor = 'rgba(255, 192, 192, 0.5)';
+            wrap.classList.add('is-dead');
+          }
+        }
+      }
+      return false;
+    };
+    const handleAlphaCollisions = (fish, timestamp) => {
+      const timeSinceSpawn = timestamp - fish.spawnTime;
+      if (timeSinceSpawn < SPAWN_IMMUNITY_MS) return;
+      for (let i = 0; i < otherFish.length; i++) {
+        const alpha = otherFish[i];
+        if (!alpha.isAlpha || alpha === fish) continue;
+        const dx = fish.x - alpha.x, dy = fish.y - alpha.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance < getRadius(alpha.size) + getRadius(fish.size)) {
+          if (alpha.size > fish.size && !fish.isShielded && !fish.isAlpha) {
+            alpha.size = Math.min(MAX_SIZE, alpha.size + computeGrowth(alpha, fish));
+            eatEffects.push({ x: fish.x, y: fish.y, size: fish.size, timer: FLASH_DURATION });
+            addNewFish(1);
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+    const handleShieldCollisions = timestamp => {
+      for (let i = shields.length - 1; i >= 0; i--) {
+        const shield = shields[i];
+        const dxPlayer = player.x - shield.x, dyPlayer = player.y - shield.y;
+        const distancePlayer = Math.sqrt(dxPlayer * dxPlayer + dyPlayer * dyPlayer);
+        if (distancePlayer < getRadius(player.size) + 5 && !player.isDead) {
+          handleShield(player, timestamp);
+          logMessage(t('log_shieldPick'));
+          shields.splice(i, 1);
+          continue;
+        }
+        for (let j = 0; j < otherFish.length; j++) {
+          const fish = otherFish[j];
+          const dxFish = fish.x - shield.x, dyFish = fish.y - shield.y;
+          const distanceFish = Math.sqrt(dxFish * dxFish + dyFish * dyFish);
+          if (distanceFish < getRadius(fish.size) + 5) {
+            handleShield(fish, timestamp);
+            shields.splice(i, 1);
+            break;
+          }
+        }
+      }
+    };
+
+    // Только игрок может подобрать таблетку.
+    const handlePillCollisions = timestamp => {
+      if (player.isDead) return;
+      for (let i = pills.length - 1; i >= 0; i--) {
+        const p = pills[i];
+        const dx = player.x - p.x, dy = player.y - p.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < getRadius(player.size) + 5) {
+          if (player.isSick) {
+            player.isSick = false;
+            logMessage(t('log_pillCure'));
+          } else {
+            player.pillImmunityUntil = (player.pillImmunityUntil > timestamp ? player.pillImmunityUntil : timestamp) + PILL_IMMUNITY_DURATION;
+            logMessage(t('log_pillImmunity'));
+          }
+          pills.splice(i, 1);
+        }
+      }
+    };
+
+    // Только игрок может подобрать бустер скорости.
+    const handleSpeedBoosterCollisions = timestamp => {
+      if (player.isDead) return;
+      for (let i = speedBoosters.length - 1; i >= 0; i--) {
+        const b = speedBoosters[i];
+        const dx = player.x - b.x, dy = player.y - b.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < getRadius(player.size) + 5) {
+          // Если уже есть бустер — продлеваем
+          player.speedBoostUntil = (player.speedBoostUntil > timestamp ? player.speedBoostUntil : timestamp) + SPEED_BOOSTER_DURATION;
+          speedBoosters.splice(i, 1);
+          logMessage(t('log_boosterPick'));
+        }
+      }
+    };
+
+    // ===== Управление автопилотом / отладкой =====
+    function setAutopilot(value) {
+      autopilot = value;
+      autopilotPill.classList.toggle('is-active', value);
+      logMessage(value ? t('log_apOn') : t('log_apOff'));
+    }
+    function setDebug(value) {
+      debugAI = value;
+      debugPill.classList.toggle('is-active', value);
+      debugPill.classList.toggle('warn', value);
+      document.body.classList.toggle('is-debug-on', value);
+      logMessage(value ? t('log_dbgOn') : t('log_dbgOff'));
+    }
+
+    // ===== Перерождение в союзника после смерти =====
+    // После смерти игрок автоматически вселяется в самого крупного живого
+    // союзника. Если несколько одного размера — берём самого старого (первого
+    // рождённого). Управление переходит на автопилоте, пользователь может его
+    // отключить вручную (Q). Доступных перерождений = число живых союзников.
+    function tryReincarnateAsAlly() {
+      if (!ALPHA_FISH) return false;
+      const allies = otherFish.filter(f => f.isAlpha);
+      if (allies.length === 0) return false;
+      allies.sort((a, b) => (b.size - a.size) || (a.spawnTime - b.spawnTime));
+      const chosen = allies[0];
+
+      // Анимация: лёгкие синие брызги в точке перехода.
+      spawnSplash(chosen.x, chosen.y);
+
+      // Переносим всё нужное состояние из союзника в игрока.
+      player.x = chosen.x;
+      player.y = chosen.y;
+      player.size = chosen.size;
+      player.spawnTime = chosen.spawnTime;
+      player.shieldedUntil = chosen.shieldedUntil || 0;
+      player.isShielded = !!chosen.isShielded;
+      player.lastBreedTime = chosen.lastBreedTime || 0;
+      player.speedBoostUntil = 0;
+      player.isSick = !!chosen.isSick;
+      player.pillImmunityUntil = chosen.pillImmunityUntil || 0;
+      player.isDead = false;
+      player.vx = 0; player.vy = 0;
+
+      // Убираем союзника из массива — он стал игроком.
+      const idx = otherFish.indexOf(chosen);
+      if (idx !== -1) otherFish.splice(idx, 1);
+
+      // Сбрасываем «красную» подсветку поля и состояние gameOver.
+      gameOver = false;
+      const wrap = document.getElementById('gameBackground');
+      wrap.style.backgroundColor = '';
+      wrap.classList.remove('is-dead');
+
+      // Пользователь явно просил включать автопилот сразу.
+      setAutopilot(true);
+
+      // Подсчитываем оставшихся союзников после переселения и сообщаем.
+      const remaining = otherFish.filter(f => f.isAlpha).length;
+      logMessage(t('log_reincarnate')(remaining));
+      if (remaining === 0) logTaunt(t('log_lastChance'));
+      return true;
+    }
+
+    // ===== Ввод =====
+    // Маппинг WASD → стрелки 
+    // или клик; альтернативный ключ R — но обычно достаточно стрелки и клика).
+    const PREVENT_KEYS = new Set(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyW','KeyA','KeyS','KeyD','Space']);
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'KeyW') pressedKeys['ArrowUp'] = true;
+      else if (e.code === 'KeyS') pressedKeys['ArrowDown'] = true;
+      else if (e.code === 'KeyA') pressedKeys['ArrowLeft'] = true;
+      else if (e.code === 'KeyD') pressedKeys['ArrowRight'] = true;
+      else pressedKeys[e.key] = true;
+      if (e.code === 'KeyQ') setAutopilot(!autopilot);
+      if (e.code === 'KeyF') setDebug(!debugAI);
+      if (e.code === 'Escape') closeAllPopovers();
+      if (PREVENT_KEYS.has(e.code)) e.preventDefault();
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.code === 'KeyW') pressedKeys['ArrowUp'] = false;
+      else if (e.code === 'KeyS') pressedKeys['ArrowDown'] = false;
+      else if (e.code === 'KeyA') pressedKeys['ArrowLeft'] = false;
+	  else if (e.code === 'KeyD') pressedKeys['ArrowRight'] = false;
+      else pressedKeys[e.key] = false;
+    });
+    function pickTargetFromPointer(clientX, clientY) {
+      if (autopilot || player.isDead) return;
+      const rect = canvas.getBoundingClientRect();
+      const screenX = (clientX - rect.left) * (canvas.width / rect.width);
+      const screenY = (clientY - rect.top) * (canvas.height / rect.height);
+      const tx = (screenX - canvas.width / 2) / SCALE;
+      const ty = (screenY - canvas.height / 2) / SCALE;
+      // Принимаем только нажатия ВНУТРИ аквариума. Клик в полях между
+      // границей мира и краем канваса не должен заставлять рыбу плыть в стену.
+      if (Math.abs(tx) > WORLD_SIZE || Math.abs(ty) > WORLD_SIZE) return;
+      targetX = tx;
+      targetY = ty;
+    }
+    canvas.addEventListener('click', (e) => pickTargetFromPointer(e.clientX, e.clientY));
+    // Запрет системного контекстного меню по всему документу
+    // (требование Яндекс.Игр п. 1.6.2.7 — никакого выделения и контекстных меню).
+    document.addEventListener('contextmenu', (e) => e.preventDefault());
+    // Запрет выделения текста через drag на mousedown (на всякий случай).
+    document.addEventListener('selectstart', (e) => {
+      // Разрешаем выделение только в текстовых полях (если будут).
+      const tag = e.target && e.target.tagName;
+      if (tag !== 'INPUT' && tag !== 'TEXTAREA') e.preventDefault();
+    });
+    // Запрет drag-start на изображениях/прочих элементах.
+    document.addEventListener('dragstart', (e) => e.preventDefault());
+    canvas.addEventListener('touchstart', (e) => {
+      if (e.touches && e.touches.length) {
+        pickTargetFromPointer(e.touches[0].clientX, e.touches[0].clientY);
+        e.preventDefault();
+      }
+    }, { passive: false });
+    canvas.addEventListener('touchmove', (e) => {
+      if (e.touches && e.touches.length) {
+        pickTargetFromPointer(e.touches[0].clientX, e.touches[0].clientY);
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+
+    // ===== Виртуальный джойстик =====
+    // Десктоп — отдельные кнопки + клавиатура. Тач — аналоговый стик:
+    // палец на джойстике, направление = вектор от центра джойстика к пальцу,
+    // палец можно водить между стрелками без отпускания.
+    const joystickEl = document.getElementById('joystick');
+    let joystickTouchId = null;
+    let joystickVec = null;
+
+    function joystickClass(dx, dy) {
+      if (Math.abs(dy) > Math.abs(dx)) return dy < 0 ? '.j-up' : '.j-down';
+      return dx < 0 ? '.j-left' : '.j-right';
+    }
+    function updateJoystickVec(clientX, clientY) {
+      const r = joystickEl.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      const dx = clientX - cx;
+      const dy = clientY - cy;
+      const mag = Math.hypot(dx, dy);
+      joystickEl.querySelectorAll('button').forEach(b => b.classList.remove('is-pressed'));
+      if (mag < 8) { joystickVec = null; return; }
+      joystickVec = { x: dx / mag, y: dy / mag };
+      const sel = joystickClass(dx, dy);
+      const btn = joystickEl.querySelector(sel);
+      if (btn) btn.classList.add('is-pressed');
+    }
+    joystickEl.addEventListener('touchstart', (e) => {
+      if (joystickTouchId !== null) return;
+      const t = e.changedTouches[0];
+      joystickTouchId = t.identifier;
+      // При активации джойстика — сбрасываем target от тапа в канвас.
+      targetX = null; targetY = null;
+      updateJoystickVec(t.clientX, t.clientY);
+      e.preventDefault();
+    }, { passive: false });
+    document.addEventListener('touchmove', (e) => {
+      if (joystickTouchId === null) return;
+      for (const t of e.changedTouches) {
+        if (t.identifier === joystickTouchId) {
+          updateJoystickVec(t.clientX, t.clientY);
+          e.preventDefault();
+        }
+      }
+    }, { passive: false });
+    const endJoystick = (e) => {
+      if (joystickTouchId === null) return;
+      for (const t of e.changedTouches) {
+        if (t.identifier === joystickTouchId) {
+          joystickTouchId = null;
+          joystickVec = null;
+          joystickEl.querySelectorAll('button').forEach(b => b.classList.remove('is-pressed'));
+        }
+      }
+    };
+    document.addEventListener('touchend', endJoystick);
+    document.addEventListener('touchcancel', endJoystick);
+    // Десктоп: мышка по отдельным кнопкам — обычные стрелки.
+    joystickEl.querySelectorAll('button').forEach(btn => {
+      const key = btn.dataset.key;
+      const press = (e) => { pressedKeys[key] = true; btn.classList.add('is-pressed'); e.preventDefault(); };
+      const release = () => { pressedKeys[key] = false; btn.classList.remove('is-pressed'); };
+      btn.addEventListener('mousedown', press);
+      btn.addEventListener('mouseup', release);
+      btn.addEventListener('mouseleave', release);
+    });
+
+    // ===== Рестарт без перезагрузки страницы (важно для Yandex Games iframe) =====
+    function restartGame() {
+      otherFish = []; shields = []; speedBoosters = []; pills = []; eatEffects = [];
+      splashes = [];
+      introStart = performance.now();
+      gameOver = false; gameWon = false;
+      pressedKeys = {}; targetX = null; targetY = null;
+      flashX = null; flashY = null; flashTimer = 0;
+      lastSpawnTime = 0; lastLevel1SpawnTime = 0; lastShieldSpawnTime = 0;
+      lastSpeedBoosterSpawn = 0; lastPillSpawn = 0;
+      lastTauntTime = 0; nextTauntDelay = 9000;
+      lastTime = performance.now();
+      player = { x: 0, y: 0, size: 5, spawnTime: 0, shieldedUntil: 0, isShielded: false, vx: 0, vy: 0, wanderAngle: 0, lastWanderChange: 0, lastBreedTime: 0, isDead: false, speedBoostUntil: 0, isSick: false, pillImmunityUntil: 0 };
+      const wrap = document.getElementById('gameBackground');
+      wrap.style.backgroundColor = '';
+      wrap.classList.remove('is-dead');
+      logDiv.innerHTML = '';
+      initBubbles();
+      generateInitialFish();
+      // Рестарт — короткая авто-интро (hold + zoom), без кнопки «В БОЙ!».
+      introPhase = 'hold';
+      introPhaseStart = performance.now();
+      lastTime = introPhaseStart;
+      if (introStartBtn) introStartBtn.hidden = true;
+      if (retryBtn) retryBtn.hidden = true;
+      requestAnimationFrame(animate);
+    }
+
+    // ===== UI обработчики =====
+    function closeAllPopovers() {
+      rulesPopover.classList.remove('is-open');
+      legendPopover.classList.remove('is-open');
+    }
+    function togglePopover(pop) {
+      const willOpen = !pop.classList.contains('is-open');
+      closeAllPopovers();
+      if (willOpen) pop.classList.add('is-open');
+    }
+    howToPlayBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = !rulesPopover.classList.contains('is-open');
+      closeAllPopovers();
+      if (open) {
+        rulesPopover.classList.add('is-open');
+        legendPopover.classList.add('is-open');
+      }
+    });
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.popover') && !e.target.closest('#howToPlayBtn')) {
+        closeAllPopovers();
+      }
+    });
+
+    autopilotPill.addEventListener('click', () => setAutopilot(!autopilot));
+    debugPill.addEventListener('click', () => setDebug(!debugAI));
+    restartBtn.addEventListener('click', () => restartGame());
+    introStartBtn.addEventListener('click', () => {
+      if (introPhase !== 'wait') return;
+      introPhase = 'zoom';
+      introPhaseStart = performance.now();
+      introStartBtn.hidden = true;
+    });
+    retryBtn.addEventListener('click', () => {
+      retryBtn.hidden = true;
+      setAutopilot(false);
+      restartGame();
+    });
+    swapSidesBtn.addEventListener('click', () => {
+      document.body.classList.toggle('is-layout-swapped');
+      try { localStorage.setItem('layoutSwapped', document.body.classList.contains('is-layout-swapped') ? '1' : '0'); } catch (e) {}
+    });
+
+    // ===== Логика игры =====
+    function update(dt, timestamp) {
+      // Во время стартовой интро-анимации ничего не двигается —
+      // только пузырьки в фоне для атмосферы.
+      if (introPhase !== 'none') {
+        bubbles.forEach(b => {
+          b.phase += dt * 1.6;
+          b.x += Math.cos(b.phase) * b.drift * dt;
+          b.y += b.vy * dt;
+          if (b.y < -WORLD_SIZE - 4) {
+            b.y = WORLD_SIZE + 4;
+            b.x = Math.random() * (WORLD_SIZE * 2) - WORLD_SIZE;
+          }
+        });
+        return;
+      }
+      // Спавн врагов идёт всегда — после смерти игрока союзники продолжают
+      // играть бесконечно, пока хоть один из них жив.
+      if (timestamp - lastLevel1SpawnTime >= LEVEL1_FISH_SPAWN_INTERVAL) {
+        spawnLevel1Fish();
+        lastLevel1SpawnTime = timestamp;
+      }
+      if (timestamp - lastShieldSpawnTime >= SHIELD_SPAWN_INTERVAL) {
+        if (Math.random() < SHIELD_SPAWN_CHANCE) spawnShield();
+        lastShieldSpawnTime = timestamp;
+      }
+      shields = shields.filter(shield => timestamp - shield.spawnTime < SHIELD_DURATION);
+
+      // Атмосферные пузырьки — поднимаются вверх, перерождаются снизу.
+      bubbles.forEach(b => {
+        b.phase += dt * 1.6;
+        b.x += Math.cos(b.phase) * b.drift * dt;
+        b.y += b.vy * dt;
+        if (b.y < -WORLD_SIZE - 4) {
+          b.y = WORLD_SIZE + 4;
+          b.x = Math.random() * (WORLD_SIZE * 2) - WORLD_SIZE;
+        }
+      });
+      // Брызги от перерождения
+      splashes.forEach(s => {
+        s.life += dt;
+        s.x += s.vx * dt;
+        s.y += s.vy * dt;
+        s.vx *= 0.92;
+        s.vy *= 0.92;
+      });
+      splashes = splashes.filter(s => s.life < s.maxLife);
+
+      // Провокационные сообщения в логе — поддерживают давление.
+      maybeShowTaunt(timestamp);
+
+      // Спавн бустера скорости
+      if (timestamp - lastSpeedBoosterSpawn >= SPEED_BOOSTER_SPAWN_INTERVAL) {
+        if (Math.random() < SPEED_BOOSTER_SPAWN_CHANCE) spawnSpeedBooster();
+        lastSpeedBoosterSpawn = timestamp;
+      }
+      speedBoosters = speedBoosters.filter(b => timestamp - b.spawnTime < SPEED_BOOSTER_VISIBLE_DURATION);
+      // Спавн таблетки
+      if (timestamp - lastPillSpawn >= PILL_SPAWN_INTERVAL) {
+        if (Math.random() < PILL_SPAWN_CHANCE) spawnPill();
+        lastPillSpawn = timestamp;
+      }
+      pills = pills.filter(p => timestamp - p.spawnTime < PILL_VISIBLE_DURATION);
+
+      // Игрок может заболеть случайно (если не safe — но safe для рыб; для игрока — только иммунитет).
+      if (!player.isDead && !player.isSick && (player.pillImmunityUntil || 0) < timestamp
+          && Math.random() < SICK_FISH_CHANCE * dt * 60) {
+        player.isSick = true;
+        logMessage(t('log_playerSick'));
+      }
+
+      let dirX = 0, dirY = 0;
+      if (!player.isDead) {
+        if (!autopilot) {
+          if (pressedKeys['ArrowRight']) dirX += 1;
+          if (pressedKeys['ArrowLeft']) dirX -= 1;
+          if (pressedKeys['ArrowUp']) dirY -= 1;
+          if (pressedKeys['ArrowDown']) dirY += 1;
+          // Аналог-джойстик переопределяет клавиатуру.
+          if (joystickVec) { dirX = joystickVec.x; dirY = joystickVec.y; }
+          // Тап в канвас — самый высокий приоритет (плывём к пальцу).
+          if (targetX !== null && targetY !== null) {
+            const dx = targetX - player.x, dy = targetY - player.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance > 5) { dirX = dx / distance; dirY = dy / distance; }
+            else { targetX = null; targetY = null; }
+          }
+        } else {
+          const runData = calculateAutopilotVector(player, timestamp, otherFish);
+          dirX = runData.vector.x; dirY = runData.vector.y;
+        }
+
+        if (dirX !== 0 || dirY !== 0) {
+          const magnitude = Math.sqrt(dirX * dirX + dirY * dirY);
+          const boostMul = (player.speedBoostUntil > timestamp) ? (1 + SPEED_BOOSTER_BONUS) : 1;
+          const sickMul = player.isSick ? 0.5 : 1;
+          player.x += PLAYER_SPEED * boostMul * sickMul * (dirX / magnitude) * dt;
+          player.y += PLAYER_SPEED * boostMul * sickMul * (dirY / magnitude) * dt;
+        }
+        const pr = getRadius(player.size);
+        let resPX = reflect(player.x, 0, -WORLD_SIZE, WORLD_SIZE, pr); player.x = resPX.position;
+        let resPY = reflect(player.y, 0, -WORLD_SIZE, WORLD_SIZE, pr); player.y = resPY.position;
+      }
+
+      otherFish.forEach(fish => {
+        const timeSinceSpawn = timestamp - fish.spawnTime;
+        if (timeSinceSpawn < SPAWN_IMMUNITY_MS) return;
+        updateFishTrace(fish, timestamp);
+        if (!fish.isSafe && !fish.isSick && (fish.pillImmunityUntil || 0) < timestamp && Math.random() < SICK_FISH_CHANCE * dt * 60) {
+          fish.isSick = true; fish.vx *= 0.5; fish.vy *= 0.5;
+        }
+
+        if (fish.isAlpha) {
+          const alphaRunData = calculateAutopilotVector(fish, timestamp, otherFish);
+          // Альфа тоже замедляется при болезни (×0.5).
+          const aFactor = calculateSpeedFactor(fish.size, fish.isSick);
+          fish.vx = PLAYER_SPEED * aFactor * alphaRunData.vector.x;
+          fish.vy = PLAYER_SPEED * aFactor * alphaRunData.vector.y;
+        } else {
+          const considerPrey = !fish.isSafe;
+          const others = otherFish.concat(player.isDead ? [] : [player]).filter(other => other !== fish && !other.isAlpha);
+          let runVectorX = 0, runVectorY = 0;
+          let primaryThreat = null, primaryPrey = null;
+          let closestThreatDist = Infinity, closestPreyDist = Infinity;
+          const detectionRadius = getDetectionRadius(fish.size);
+          for (const other of others) {
+            if (other.isShielded) continue;
+            const dx = other.x - fish.x, dy = other.y - fish.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance < detectionRadius && distance > 0) {
+              if (other.size > fish.size) {
+                runVectorX += -dx / distance / distance;
+                runVectorY += -dy / distance / distance;
+                if (distance < closestThreatDist) { closestThreatDist = distance; primaryThreat = other; }
+              } else if (considerPrey && other.size < fish.size && (timestamp - other.spawnTime >= SPAWN_IMMUNITY_MS)) {
+                runVectorX += dx / distance / distance;
+                runVectorY += dy / distance / distance;
+                if (distance < closestPreyDist) { closestPreyDist = distance; primaryPrey = other; }
+              }
+            }
+          }
+          const fr = getRadius(fish.size);
+          const wn = wallAvoidance(fish.x, fish.y, fr);
+          const wnMag = Math.hypot(wn.x, wn.y);
+
+          // Smart wall steering для non-alpha — только в режиме бегства.
+          // При охоте без угрозы стена ослаблена, чтобы хищник доходил до
+          // добычи, прижатой к границе.
+          let nonAlphaTangent = false;
+          const fleeMagSq = runVectorX * runVectorX + runVectorY * runVectorY;
+          if (primaryThreat && wnMag > 0.1 && fleeMagSq > 1e-8) {
+            const wnNx = wn.x / wnMag, wnNy = wn.y / wnMag;
+            const onNormal = runVectorX * wnNx + runVectorY * wnNy;
+            if (onNormal < 0) {
+              const t1x = -wnNy, t1y = wnNx;
+              const t2x = wnNy, t2y = -wnNx;
+              const fleeMag = Math.sqrt(fleeMagSq);
+              const fnx = runVectorX / fleeMag, fny = runVectorY / fleeMag;
+              let s1 = fnx * t1x + fny * t1y;
+              let s2 = fnx * t2x + fny * t2y;
+              // Бонус за выход в открытое пространство (к центру).
+              const cxN = -fish.x, cyN = -fish.y;
+              const cm = Math.hypot(cxN, cyN) || 1;
+              s1 += (cxN / cm * t1x + cyN / cm * t1y) * 0.7;
+              s2 += (cxN / cm * t2x + cyN / cm * t2y) * 0.7;
+              // wanderAngle — слабый тай-брейк.
+              const cw = Math.cos(fish.wanderAngle), sw = Math.sin(fish.wanderAngle);
+              s1 += (cw * t1x + sw * t1y) * 0.15;
+              s2 += (cw * t2x + sw * t2y) * 0.15;
+              const tx = s1 >= s2 ? t1x : t2x;
+              const ty = s1 >= s2 ? t1y : t2y;
+              runVectorX = tx * (fleeMag + 0.5) + wn.x * 1.5;
+              runVectorY = ty * (fleeMag + 0.5) + wn.y * 1.5;
+              nonAlphaTangent = true;
+            }
+          }
+
+          // НЕТ автоматического wallAvoidance в нетангенциальной ветке —
+          // иначе рыба не подплывает к стене внешним контуром. Граница
+          // обрабатывается жёстким клампом в applyVelocity.
+
+          const magnitude = Math.sqrt(runVectorX * runVectorX + runVectorY * runVectorY);
+          let dirX, dirY;
+          if (magnitude > 0.01) {
+            dirX = runVectorX / magnitude;
+            dirY = runVectorY / magnitude;
+          } else {
+            if (timestamp - fish.lastWanderChange >= 1000) {
+              fish.wanderAngle += (Math.random() * 2 - 1) * WANDER_ANGLE_CHANGE;
+              fish.lastWanderChange = timestamp;
+            }
+            dirX = Math.cos(fish.wanderAngle);
+            dirY = Math.sin(fish.wanderAngle);
+            // Тангенциальное скольжение в режиме блуждания — только если
+            // wanderAngle направлен В стену.
+            if (wnMag > 0.1) {
+              const wnNx = wn.x / wnMag, wnNy = wn.y / wnMag;
+              const wOnNormal = dirX * wnNx + dirY * wnNy;
+              if (wOnNormal < 0) {
+                const t1x = -wnNy, t1y = wnNx;
+                const t2x = wnNy, t2y = -wnNx;
+                const cxN = -fish.x, cyN = -fish.y;
+                const cm = Math.hypot(cxN, cyN) || 1;
+                const s1 = cxN / cm * t1x + cyN / cm * t1y;
+                const s2 = cxN / cm * t2x + cyN / cm * t2y;
+                const tx = s1 >= s2 ? t1x : t2x;
+                const ty = s1 >= s2 ? t1y : t2y;
+                dirX = tx + wn.x * 0.5;
+                dirY = ty + wn.y * 0.5;
+                const m2 = Math.sqrt(dirX * dirX + dirY * dirY) || 1;
+                dirX /= m2; dirY /= m2;
+                fish.wanderAngle = Math.atan2(dirY, dirX);
+              }
+            }
+          }
+
+          const speed = GLOBAL_SPEED * calculateSpeedFactor(fish.size, fish.isSick);
+          fish.vx = speed * dirX;
+          fish.vy = speed * dirY;
+        }
+
+        applyVelocity(fish, dt);
+        if (fish.shieldedUntil && timestamp > fish.shieldedUntil) {
+          fish.shieldedUntil = 0; fish.isShielded = false;
+        }
+      });
+
+      for (let i = otherFish.length - 1; i >= 0; i--) {
+        for (let j = i - 1; j >= 0; j--) {
+          if (j >= otherFish.length) continue;
+          const removedFish = handleFishCollisions(otherFish[i], otherFish[j], timestamp);
+          if (removedFish) {
+            const idx = otherFish.indexOf(removedFish);
+            if (idx !== -1) otherFish.splice(idx, 1);
+            if (removedFish === otherFish[i]) { i--; break; }
+          }
+        }
+        if (i < 0 || i >= otherFish.length) continue;
+        if (handlePlayerCollisions(otherFish[i], timestamp)) {
+          otherFish.splice(i, 1);
+        } else if (handleAlphaCollisions(otherFish[i], timestamp)) {
+          otherFish.splice(i, 1);
+        }
+      }
+      handleShieldCollisions(timestamp);
+      handleSpeedBoosterCollisions(timestamp);
+      handlePillCollisions(timestamp);
+
+      if (player.isShielded && timestamp > player.shieldedUntil) {
+        player.isShielded = false; player.shieldedUntil = 0;
+        logMessage(t('log_shieldEnd'));
+      }
+      if (player.speedBoostUntil && timestamp > player.speedBoostUntil) {
+        player.speedBoostUntil = 0;
+        logMessage(t('log_boosterEnd'));
+      }
+      if (timestamp - lastSpawnTime >= FISH_SPAWN_INTERVAL) {
+        addNewFish(1); lastSpawnTime = timestamp;
+      }
+
+      eatEffects.forEach(effect => effect.timer -= dt);
+      eatEffects = eatEffects.filter(effect => effect.timer > 0);
+
+      // Условие победы:
+      // 1) игрок достиг максимального размера (100) — финальная победа;
+      // 2) пока игрок жив, на карте остались только союзники.
+      if (!player.isDead && player.size >= MAX_SIZE) gameWon = true;
+      if (ALPHA_FISH && !player.isDead) {
+        const aliveAllies = otherFish.filter(f => f.isAlpha).length;
+        const aliveNonAllies = otherFish.length - aliveAllies;
+        if (aliveAllies > 0 && aliveNonAllies === 0) gameWon = true;
+      }
+    }
+
+    // ===== Отрисовка =====
+    // Стрелки от entity ко всем релевантным сущностям + wall-avoidance вектор.
+    function drawArrow(fromX, fromY, toX, toY, color, width, alpha) {
+      ctx.save();
+      ctx.globalAlpha = alpha !== undefined ? alpha : 1;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = (width !== undefined ? width : 1.5) / SCALE;
+      ctx.beginPath();
+      ctx.moveTo(fromX, fromY);
+      ctx.lineTo(toX, toY);
+      ctx.stroke();
+      const dx = toX - fromX, dy = toY - fromY;
+      const a = Math.atan2(dy, dx);
+      const headLen = 6 / SCALE;
+      ctx.beginPath();
+      ctx.moveTo(toX, toY);
+      ctx.lineTo(toX - headLen * Math.cos(a - Math.PI / 6), toY - headLen * Math.sin(a - Math.PI / 6));
+      ctx.moveTo(toX, toY);
+      ctx.lineTo(toX - headLen * Math.cos(a + Math.PI / 6), toY - headLen * Math.sin(a + Math.PI / 6));
+      ctx.stroke();
+      ctx.restore();
+    }
+    function drawAIDebug(entity, timestamp) {
+      if (!debugAI) return;
+      const detection = getDetectionRadius(entity.size, entity === player || entity.isAlpha);
+      // 1. Все угрозы (красные тонкие) и добычи (зелёные тонкие) в радиусе видимости.
+      for (const o of otherFish) {
+        if (o === entity || o.isShielded) continue;
+        const dx = o.x - entity.x, dy = o.y - entity.y;
+        const d = Math.hypot(dx, dy);
+        if (d <= 0 || d >= detection) continue;
+        if (o.size > entity.size) drawArrow(entity.x, entity.y, o.x, o.y, '#ff3b30', 0.8, 0.45);
+        else if (o.size < entity.size) drawArrow(entity.x, entity.y, o.x, o.y, '#34c759', 0.8, 0.35);
+      }
+      // 2. Главная угроза/добыча — толстым.
+      if (entity.threat && otherFish.includes(entity.threat)) {
+        drawArrow(entity.x, entity.y, entity.threat.x, entity.threat.y, '#ff3b30', 1.6, 0.85);
+      }
+      if (entity.prey && otherFish.includes(entity.prey)) {
+        const blink = (Math.sin(timestamp / 100) + 1) * 0.5 * 0.5 + 0.5;
+        drawArrow(entity.x, entity.y, entity.prey.x, entity.prey.y, '#34c759', 1.6, blink);
+      }
+      // 3. Wall-avoidance — фиолетовая стрелка от рыбы к проекции стен.
+      const r = getRadius(entity.size);
+      const wn = wallAvoidance(entity.x, entity.y, r);
+      const wnMag = Math.hypot(wn.x, wn.y);
+      if (wnMag > 0.05) {
+        const len = 18;
+        drawArrow(entity.x, entity.y, entity.x + wn.x / wnMag * len, entity.y + wn.y / wnMag * len, '#9b59b6', 1.4, 0.9);
+      }
+      // 4. Радиус видимости (тонкий пунктир).
+      ctx.save();
+      ctx.globalAlpha = 0.2;
+      ctx.setLineDash([4, 6]);
+      ctx.beginPath();
+      ctx.arc(entity.x, entity.y, detection, 0, 2 * Math.PI);
+      ctx.strokeStyle = entity === player ? '#a16eff' : (entity.isAlpha ? '#0a84ff' : '#888');
+      ctx.lineWidth = 1 / SCALE;
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    function drawEatEffect(effect) {
+      ctx.save();
+      ctx.globalAlpha = effect.timer / FLASH_DURATION * 0.5;
+      const radius = getRadius(effect.size);
+      const particleCount = effect.size > 10 ? 15 : 5;
+      for (let i = 0; i < particleCount; i++) {
+        const angle = Math.random() * 2 * Math.PI;
+        const dist = Math.random() * radius;
+        const particleSize = Math.random() * 3 + 1;
+        ctx.beginPath();
+        ctx.arc(effect.x + Math.cos(angle) * dist, effect.y + Math.sin(angle) * dist, particleSize, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(255, 0, 0, 0.7)'; ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawWorld(timestamp) {
+      // Атмосферные пузырьки за рыбами.
+      bubbles.forEach(b => {
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(255,255,255,${b.alpha})`;
+        ctx.arc(b.x, b.y, b.r, 0, 2 * Math.PI);
+        ctx.fill();
+      });
+
+      // Стильная рамка мира: внешний свет + двойной контур.
+      const wlw = 2 / SCALE;
+      ctx.save();
+      // лёгкое свечение по краю
+      ctx.shadowColor = 'rgba(10,80,160,0.35)';
+      ctx.shadowBlur = 12;
+      ctx.strokeStyle = 'rgba(20,90,160,0.55)';
+      ctx.lineWidth = wlw * 1.4;
+      ctx.strokeRect(-WORLD_SIZE, -WORLD_SIZE, WORLD_SIZE * 2, WORLD_SIZE * 2);
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      // тёплая внутренняя рамка-обводка
+      ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+      ctx.lineWidth = wlw * 0.6;
+      ctx.strokeRect(-WORLD_SIZE + 1.2, -WORLD_SIZE + 1.2, WORLD_SIZE * 2 - 2.4, WORLD_SIZE * 2 - 2.4);
+      // тонкая красная «зона смерти» снаружи (намёк на границу)
+      ctx.strokeStyle = 'rgba(255,59,48,0.45)';
+      ctx.lineWidth = wlw * 0.7;
+      ctx.setLineDash([3, 4]);
+      ctx.strokeRect(-WORLD_SIZE - 0.6, -WORLD_SIZE - 0.6, WORLD_SIZE * 2 + 1.2, WORLD_SIZE * 2 + 1.2);
+      ctx.setLineDash([]);
+      ctx.restore();
+
+      if (debugAI) {
+        if (!player.isDead) {
+          const playerRunData = calculateAutopilotVector(player, timestamp, otherFish);
+          player.threat = playerRunData.threat; player.prey = playerRunData.prey;
+          drawAIDebug(player, timestamp);
+        }
+        otherFish.forEach(fish => {
+          // Для всех рыб (не только альф) теперь показываем вектора.
+          if (fish.isAlpha) {
+            const d = calculateAutopilotVector(fish, timestamp, otherFish);
+            fish.threat = d.threat; fish.prey = d.prey;
+          }
+          drawAIDebug(fish, timestamp);
+        });
+      }
+
+      if (!player.isDead) {
+        ctx.save();
+        const pr = getRadius(player.size);
+        // Игрок — ярко мерцающий фиолетовый круг (двойная пульсация
+        // + ореол + плавающий hue для максимальной заметности).
+        const t1 = Math.sin(timestamp / 180);
+        const t2 = Math.sin(timestamp / 320);
+        const lightness = 55 + 18 * t1;          // 37 — 73
+        const hueShift = 285 + 18 * t2;          // 267 — 303
+        // Внешний ореол свечения.
+        const haloR = pr + 4 + 2 * (0.5 + 0.5 * t1);
+        ctx.save();
+        const grad = ctx.createRadialGradient(player.x, player.y, pr * 0.6, player.x, player.y, haloR);
+        grad.addColorStop(0, `hsla(${hueShift}, 90%, ${lightness}%, 0.45)`);
+        grad.addColorStop(1, `hsla(${hueShift}, 90%, ${lightness}%, 0)`);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, haloR, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.restore();
+        // Тело игрока.
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, pr, 0, 2 * Math.PI);
+        ctx.fillStyle = `hsla(${hueShift}, 92%, ${lightness}%, 0.95)`;
+        ctx.fill();
+        // Внутренний блик для дополнительного «жизненного» мерцания.
+        ctx.beginPath();
+        ctx.arc(player.x - pr * 0.3, player.y - pr * 0.3, pr * 0.45, 0, 2 * Math.PI);
+        ctx.fillStyle = `hsla(${hueShift + 15}, 95%, ${Math.min(85, lightness + 22)}%, ${0.35 + 0.18 * t2})`;
+        ctx.fill();
+        // Статусные обводки игрока — концентрические.
+        const pStat = [];
+        if (player.isShielded) pStat.push('rgba(255,204,0,0.95)');
+        if (player.speedBoostUntil > timestamp) pStat.push('rgba(95,189,255,0.95)');
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < pStat.length; i++) {
+          ctx.beginPath();
+          ctx.arc(player.x, player.y, pr + 1.2 + i * 2.2, 0, 2 * Math.PI);
+          ctx.strokeStyle = pStat[i];
+          ctx.stroke();
+        }
+        if (debugAI) {
+          ctx.font = '6px -apple-system, Helvetica Neue, sans-serif';
+          ctx.fillStyle = '#fff';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.shadowColor = 'rgba(0,0,0,0.7)'; ctx.shadowBlur = 2;
+          ctx.fillText(Math.floor(player.size), player.x, player.y);
+          ctx.textBaseline = 'alphabetic';
+          ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+        }
+        ctx.restore();
+      }
+
+      otherFish.forEach(fish => {
+        ctx.save();
+        if (timestamp - fish.spawnTime < SPAWN_IMMUNITY_MS) ctx.globalAlpha = 0.5;
+        // Коричневый след у больной рыбы — видимая «болезненная» дорожка.
+        if (fish.isSick && fish.trace && fish.trace.length > 1) {
+          ctx.save();
+          ctx.globalAlpha = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(fish.trace[0].x, fish.trace[0].y);
+          for (let i = 1; i < fish.trace.length; i++) ctx.lineTo(fish.trace[i].x, fish.trace[i].y);
+          ctx.strokeStyle = 'rgba(139,69,19,0.9)';
+          ctx.lineWidth = 1.4 / SCALE;
+          ctx.stroke();
+          ctx.restore();
+        }
+        const fr = getRadius(fish.size);
+        // Заливка по типу: альфа — синий, больше игрока — красный, меньше — зелёный.
+        let fill;
+        if (fish.isAlpha) fill = 'rgba(10,132,255,0.85)';
+        else if (fish.size > player.size) fill = 'rgba(255,59,48,0.8)';
+        else fill = 'rgba(52,199,89,0.8)';
+        ctx.beginPath();
+        ctx.arc(fish.x, fish.y, fr, 0, 2 * Math.PI);
+        ctx.fillStyle = fill;
+        ctx.fill();
+        // Статусные обводки рыбы — концентрические, можно несколько одновременно.
+        const stat = [];
+        if (fish.isShielded) stat.push('rgba(255,204,0,0.95)');
+        if (fish.isSick) stat.push('rgba(139,69,19,0.95)');
+        if (fish.isSafe) stat.push('rgba(52,199,89,0.95)');
+        if (fish.speedBoostUntil && fish.speedBoostUntil > timestamp) stat.push('rgba(95,189,255,0.95)');
+        ctx.lineWidth = 1.4;
+        for (let i = 0; i < stat.length; i++) {
+          ctx.beginPath();
+          ctx.arc(fish.x, fish.y, fr + 1.2 + i * 2, 0, 2 * Math.PI);
+          ctx.strokeStyle = stat[i];
+          ctx.stroke();
+        }
+        if (debugAI) {
+          ctx.font = '6px -apple-system, Helvetica Neue, sans-serif';
+          ctx.fillStyle = '#fff';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.shadowColor = 'rgba(0,0,0,0.7)'; ctx.shadowBlur = 2;
+          ctx.fillText(Math.floor(fish.size), fish.x, fish.y);
+          ctx.textBaseline = 'alphabetic';
+          ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+        }
+        ctx.restore();
+      });
+
+      shields.forEach(shield => {
+        const life = performance.now() - shield.spawnTime;
+        let alpha = Math.max(0, 1 - life / SHIELD_DURATION);
+        const pulse = 1 + 0.1 * Math.sin(timestamp / 200);
+        const s = 5 * pulse;
+        ctx.save();
+        ctx.translate(shield.x, shield.y);
+        // Геральдический щит: округлый верх, заострённое дно.
+        ctx.beginPath();
+        ctx.moveTo(-s, -s * 0.55);
+        ctx.quadraticCurveTo(0, -s * 0.85, s, -s * 0.55);
+        ctx.lineTo(s, s * 0.15);
+        ctx.quadraticCurveTo(s * 0.55, s * 1.05, 0, s * 1.15);
+        ctx.quadraticCurveTo(-s * 0.55, s * 1.05, -s, s * 0.15);
+        ctx.closePath();
+        ctx.fillStyle = `rgba(255,204,0,${alpha})`;
+        ctx.fill();
+        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = `rgba(180,120,0,${alpha})`;
+        ctx.stroke();
+        // Декоративная вертикальная линия.
+        ctx.beginPath();
+        ctx.moveTo(0, -s * 0.5);
+        ctx.lineTo(0, s * 0.95);
+        ctx.lineWidth = 0.6;
+        ctx.strokeStyle = `rgba(255,149,0,${alpha * 0.7})`;
+        ctx.stroke();
+        ctx.restore();
+      });
+
+      // Бустер скорости — настоящая голубая молния (Z-форма) со свечением
+      speedBoosters.forEach(b => {
+        const life = performance.now() - b.spawnTime;
+        const fadeAlpha = Math.max(0.35, 1 - life / SPEED_BOOSTER_VISIBLE_DURATION);
+        const pulse = 1 + 0.15 * Math.sin(timestamp / 140);
+        ctx.save();
+        ctx.translate(b.x, b.y);
+        // мягкий ореол + дополнительное свечение
+        ctx.beginPath();
+        ctx.arc(0, 0, 8 * pulse, 0, 2 * Math.PI);
+        ctx.fillStyle = `rgba(95,189,255,${0.18 * fadeAlpha})`;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(0, 0, 5.5 * pulse, 0, 2 * Math.PI);
+        ctx.fillStyle = `rgba(120,200,255,${0.22 * fadeAlpha})`;
+        ctx.fill();
+        // Молния: Z-образная форма из 6 вершин (Material Icons "bolt")
+        // Верхний кончик справа, нижний кончик слева, классический зигзаг.
+        const s = 0.65 * pulse;
+        ctx.beginPath();
+        ctx.moveTo(-5 * s,  9 * s); // нижний-левый кончик
+        ctx.lineTo( 5 * s,  0    ); // диагональ вверх-вправо
+        ctx.lineTo( 0    ,  0    ); // ступенька-надрез влево
+        ctx.lineTo( 4 * s, -9 * s); // диагональ вверх до верхнего-правого кончика
+        ctx.lineTo(-4 * s,  0    ); // диагональ вниз-влево
+        ctx.lineTo( 1 * s,  0    ); // ступенька-надрез вправо
+        ctx.closePath();
+        // обводка снаружи
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = `rgba(10,120,216,${fadeAlpha})`;
+        ctx.stroke();
+        // заливка
+        ctx.fillStyle = `rgba(95,189,255,${fadeAlpha})`;
+        ctx.fill();
+        // яркая внутренняя жилка (поменьше) для эффекта свечения
+        ctx.beginPath();
+        const si = 0.4 * pulse;
+        ctx.moveTo(-5 * si,  9 * si);
+        ctx.lineTo( 5 * si,  0    );
+        ctx.lineTo( 0     ,  0    );
+        ctx.lineTo( 4 * si, -9 * si);
+        ctx.lineTo(-4 * si,  0    );
+        ctx.lineTo( 1 * si,  0    );
+        ctx.closePath();
+        ctx.fillStyle = `rgba(230,245,255,${0.85 * fadeAlpha})`;
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // Таблетка-капсула: красный + белый, лёгкий пульс.
+      pills.forEach(p => {
+        const life = performance.now() - p.spawnTime;
+        const fadeAlpha = Math.max(0.4, 1 - life / PILL_VISIBLE_DURATION);
+        const pulse = 1 + 0.08 * Math.sin(timestamp / 250);
+        const w = 4.5 * pulse, h = 2.3 * pulse;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(-0.35);
+        // Красная половина
+        ctx.beginPath();
+        ctx.moveTo(0, -h);
+        ctx.lineTo(-w + h, -h);
+        ctx.arc(-w + h, 0, h, -Math.PI / 2, Math.PI / 2, true);
+        ctx.lineTo(0, h);
+        ctx.closePath();
+        ctx.fillStyle = `rgba(225,60,60,${fadeAlpha})`;
+        ctx.fill();
+        // Белая половина
+        ctx.beginPath();
+        ctx.moveTo(0, -h);
+        ctx.lineTo(w - h, -h);
+        ctx.arc(w - h, 0, h, -Math.PI / 2, Math.PI / 2);
+        ctx.lineTo(0, h);
+        ctx.closePath();
+        ctx.fillStyle = `rgba(255,255,255,${fadeAlpha})`;
+        ctx.fill();
+        // Контур
+        ctx.beginPath();
+        ctx.moveTo(-w + h, -h);
+        ctx.lineTo(w - h, -h);
+        ctx.arc(w - h, 0, h, -Math.PI / 2, Math.PI / 2);
+        ctx.lineTo(-w + h, h);
+        ctx.arc(-w + h, 0, h, Math.PI / 2, -Math.PI / 2);
+        ctx.lineWidth = 0.6;
+        ctx.strokeStyle = `rgba(120,30,30,${fadeAlpha})`;
+        ctx.stroke();
+        ctx.restore();
+      });
+
+      eatEffects.forEach(drawEatEffect);
+
+      // Брызги (кровавые при гибели союзника, любого цвета по параметру).
+      splashes.forEach(s => {
+        const k = 1 - s.life / s.maxLife;
+        ctx.beginPath();
+        const c = s.color || 'rgba(200,30,30,';
+        ctx.fillStyle = c + (0.85 * k) + ')';
+        ctx.arc(s.x, s.y, 1.2 + 1.6 * k, 0, 2 * Math.PI);
+        ctx.fill();
+      });
+    }
+
+    // ===== HUD =====
+    function updateHUD() {
+      const sz = player.isDead ? 0 : player.size;
+      sizeValue.textContent = player.isDead ? t('dead') : `${Math.floor(sz)} / 100`;
+      const now = performance.now();
+      shieldBadge.hidden = !player.isShielded;
+      boosterBadge.hidden = !(player.speedBoostUntil > now);
+    }
+
+    function animate(timestamp) {
+      const dt = Math.min((timestamp - lastTime) / 1000, 0.1);
+      lastTime = timestamp;
+      // Игровая логика паузится при game-over/win — но цикл анимации
+      // продолжается, чтобы корректно перерисовываться при ресайзе окна.
+      if (!gameOver && !gameWon) update(dt, timestamp);
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Интро: приближение камеры на игрока, плавное отдаление.
+      // Машина состояний: 'wait' — ждём клик «В БОЙ!»; 'hold' — автопауза
+      // на рестарте; 'zoom' — плавный отдалённый зум; 'none' — обычная игра.
+      let zoomFactor = 1;
+      let cameraOnPlayer = false;
+      const introActive = introPhase !== 'none';
+      if (introPhase === 'wait') {
+        zoomFactor = 4;
+        cameraOnPlayer = true;
+      } else if (introPhase === 'hold') {
+        zoomFactor = 4;
+        cameraOnPlayer = true;
+        if (timestamp - introPhaseStart >= INTRO_HOLD_MS) {
+          introPhase = 'zoom';
+          introPhaseStart = timestamp;
+        }
+      } else if (introPhase === 'zoom') {
+        const k = Math.min(1, (timestamp - introPhaseStart) / INTRO_ZOOM_MS);
+        const e = 1 - Math.pow(1 - k, 3); // ease-out cubic
+        zoomFactor = 4 - 3 * e;
+        cameraOnPlayer = true;
+        if (k >= 1) {
+          introPhase = 'none';
+          // После окончания зума — игра реально доступна.
+          fireLoadingReadyOnce();
+        }
+      }
+      const introElapsed = introPhaseStart ? timestamp - introPhaseStart : 0;
+
+      ctx.save();
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.scale(SCALE * zoomFactor, SCALE * zoomFactor);
+      if (cameraOnPlayer) {
+        // Сдвигаем мир так, чтобы игрок оказался в центре экрана.
+        // По мере zoomFactor → 1 этот сдвиг плавно становится 0
+        // (умножаем на (zoomFactor - 1) / 3).
+        const blend = Math.max(0, (zoomFactor - 1) / 3);
+        ctx.translate(-player.x * blend, -player.y * blend);
+      }
+      drawWorld(timestamp);
+
+      if (flashTimer > 0) {
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = EAT_FLASH_COLOR;
+        ctx.beginPath();
+        ctx.arc(flashX, flashY, getRadius(player.size) * 1.5, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        flashTimer -= dt;
+      }
+      ctx.restore();
+
+      updateHUD();
+
+      // Интро: стрелка к игроку и подпись «это ты». Затухает на zoom.
+      if (introActive) {
+        let labelAlpha;
+        if (introPhase === 'wait' || introPhase === 'hold') labelAlpha = 1;
+        else if (introPhase === 'zoom') labelAlpha = Math.max(0, 1 - introElapsed / (INTRO_ZOOM_MS * 0.6));
+        else labelAlpha = 0;
+        if (labelAlpha > 0.02) {
+          ctx.save();
+          ctx.globalAlpha = labelAlpha;
+          const cx = canvas.width / 2;
+          const cy = canvas.height / 2;
+          // Подпись — сверху-справа от центра.
+          const dx = Math.round(canvas.height * 0.18);
+          const dy = -Math.round(canvas.height * 0.16);
+          ctx.font = `700 ${Math.round(canvas.height * 0.045)}px -apple-system, "Helvetica Neue", sans-serif`;
+          ctx.fillStyle = '#d8230f';
+          ctx.textAlign = 'left';
+          ctx.shadowColor = 'rgba(255,255,255,0.85)';
+          ctx.shadowBlur = 6;
+          ctx.fillText(t('introYouAre'), cx + dx, cy + dy);
+          ctx.shadowBlur = 0;
+          // Стрелка от подписи к игроку (рукописная, с лёгкой кривизной).
+          const startX = cx + dx - 6;
+          const startY = cy + dy + 6;
+          const endX = cx + Math.round(canvas.height * 0.04);
+          const endY = cy - Math.round(canvas.height * 0.04);
+          ctx.strokeStyle = '#d8230f';
+          ctx.lineWidth = Math.max(2, Math.round(canvas.height * 0.005));
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(startX, startY);
+          ctx.quadraticCurveTo(
+            (startX + endX) / 2 + 30,
+            (startY + endY) / 2 - 10,
+            endX, endY
+          );
+          ctx.stroke();
+          // Наконечник стрелки.
+          const headLen = Math.max(8, canvas.height * 0.018);
+          const a = Math.atan2(endY - ((startY + endY) / 2 - 10), endX - ((startX + endX) / 2 + 30));
+          ctx.beginPath();
+          ctx.moveTo(endX, endY);
+          ctx.lineTo(endX - headLen * Math.cos(a - 0.45), endY - headLen * Math.sin(a - 0.45));
+          ctx.moveTo(endX, endY);
+          ctx.lineTo(endX - headLen * Math.cos(a + 0.45), endY - headLen * Math.sin(a + 0.45));
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      const allies = otherFish.filter(fish => fish.isAlpha);
+      const allAlliesDead = allies.length === 0;
+
+      if (gameOver && (!ALPHA_FISH || allAlliesDead)) {
+        const cx = canvas.width / 2, cy = canvas.height / 2;
+        ctx.font = `${Math.round(canvas.height * 0.06)}px -apple-system, "Helvetica Neue", sans-serif`;
+        ctx.fillStyle = '#1c1d22';
+        ctx.textAlign = 'center';
+        ctx.fillText(t('gameOver'), cx, cy);
+        ctx.font = `${Math.round(canvas.height * 0.025)}px -apple-system, sans-serif`;
+        ctx.fillStyle = '#6b7280';
+        ctx.fillText(t('restartHint'), cx, cy + Math.round(canvas.height * 0.05));
+        if (retryBtn) retryBtn.hidden = false;
+      } else if (gameWon) {
+        const cx = canvas.width / 2, cy = canvas.height / 2;
+        ctx.font = `${Math.round(canvas.height * 0.06)}px -apple-system, "Helvetica Neue", sans-serif`;
+        ctx.fillStyle = '#34c759';
+        ctx.textAlign = 'center';
+        ctx.fillText(t('victory'), cx, cy);
+        ctx.font = `${Math.round(canvas.height * 0.025)}px -apple-system, sans-serif`;
+        ctx.fillStyle = '#6b7280';
+        ctx.fillText(t('restartHint'), cx, cy + Math.round(canvas.height * 0.05));
+        if (retryBtn) retryBtn.hidden = false;
+      }
+      // Цикл анимации ВСЕГДА работает — чтобы при изменении размеров окна
+      // канвас корректно перерисовывался (требование п. 1.6.2.3).
+      requestAnimationFrame(animate);
+    }
+
+    // ===== Yandex Games SDK + start =====
+    function initYandexSDK() {
+      if (typeof window.YaGames === 'undefined') {
+        return Promise.resolve(null);
+      }
+      try {
+        return window.YaGames.init({ orientation: { value: 'landscape', lock: true } })
+          .then(sdk => { window._ysdk = sdk; return sdk; })
+          .catch(err => { console.warn('YaGames.init error', err); return null; });
+      } catch (e) {
+        console.warn('YaGames init threw', e);
+        return Promise.resolve(null);
+      }
+    }
+    function fireLoadingReadyOnce() {
+      if (loadingReadyFired) return;
+      loadingReadyFired = true;
+      try { notifyLoadingReady(); gameplayStart(); } catch (e) { /* noop */ }
+    }
+    function notifyLoadingReady() {
+      const sdk = window._ysdk;
+      try { sdk && sdk.features && sdk.features.LoadingAPI && sdk.features.LoadingAPI.ready(); }
+      catch (e) { console.warn('LoadingAPI.ready failed', e); }
+    }
+    function gameplayStart() {
+      const sdk = window._ysdk;
+      try { sdk && sdk.features && sdk.features.GameplayAPI && sdk.features.GameplayAPI.start(); }
+      catch (e) { /* noop */ }
+    }
+    function gameplayStop() {
+      const sdk = window._ysdk;
+      try { sdk && sdk.features && sdk.features.GameplayAPI && sdk.features.GameplayAPI.stop(); }
+      catch (e) { /* noop */ }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) gameplayStop(); else gameplayStart();
+    });
+    window.addEventListener('blur', gameplayStop);
+    window.addEventListener('focus', gameplayStart);
+
+    // Восстанавливаем сохранённое состояние свапа лево/право.
+    try {
+      if (localStorage.getItem('layoutSwapped') === '1') document.body.classList.add('is-layout-swapped');
+    } catch (e) {}
+
+    function bootstrap() {
+      // Сначала инициализируем SDK (и ждём промис), чтобы корректно прочитать
+      // язык из ysdk.environment.i18n.lang (требование Я.Игр п. 2.14).
+      // ВАЖНО: detectLang() вызывается ПОСЛЕ resolve промиса SDK, чтобы
+      // window._ysdk был выставлен.
+      // LoadingAPI.ready() из Game Ready (требование п. 1.19) вызывается
+      // только после окончания стартовой интро-анимации — в момент, когда
+      // пользователь действительно может играть, а не на «загрузке».
+      const runGame = () => {
+        try {
+          // Авто-определение языка через SDK (если SDK не доступен —
+          // fallback на navigator.language).
+          LANG = detectLang();
+          applyI18n();
+          resizeCanvas();
+          initBubbles();
+          generateInitialFish();
+          // Первый запуск: ждём клик «В БОЙ!». Отдаление и старт игры —
+          // только после нажатия кнопки.
+          introPhase = 'wait';
+          introPhaseStart = performance.now();
+          lastTime = introPhaseStart;
+          if (introStartBtn) introStartBtn.hidden = false;
+          if (retryBtn) retryBtn.hidden = true;
+          requestAnimationFrame(animate);
+          // Игра загружена и ждёт нажатия — это и есть «доступна для игры».
+          fireLoadingReadyOnce();
+        } catch (e) {
+          console.error('Bootstrap failed:', e);
+          if (typeof logDiv !== 'undefined' && logDiv) {
+            logDiv.innerHTML = '<div style="color:#d8230f;font-weight:700;white-space:pre-wrap;font-family:monospace">Bootstrap error:\n' + (e && e.stack ? e.stack : String(e)) + '</div>';
+          }
+          // Fallback: всё равно сообщим Game Ready, чтобы не остался лоадер.
+          setTimeout(() => { try { fireLoadingReadyOnce(); } catch (e2) {} }, 100);
+        }
+      };
+      // Дождаться SDK (с таймаутом 3 сек на случай долгой загрузки /sdk.js),
+      // затем запустить игру.
+      let started = false;
+      const startOnce = () => { if (!started) { started = true; runGame(); } };
+      initYandexSDK().then(startOnce).catch(startOnce);
+      // Страховка: если SDK не отвечает — стартуем без него через 3 сек.
+      setTimeout(startOnce, 3000);
+    }
+
+    // Service Worker регистрируется только в безопасном HTTPS-контексте
+    // (для PWA-установки и TWA Google Play). На file:// и в Capacitor
+    // регистрация пропускается без ошибок.
+    if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+      navigator.serviceWorker.register('service-worker.js').catch(() => {});
+    }
+
+    // Стартуем после готовности DOM и одного кадра layout.
+    function startWhenReady() {
+      requestAnimationFrame(() => requestAnimationFrame(bootstrap));
+    }
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      startWhenReady();
+    } else {
+      document.addEventListener('DOMContentLoaded', startWhenReady);
+    }
+  </script>
+</body>
+</html>
